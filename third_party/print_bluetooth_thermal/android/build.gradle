@@ -1,0 +1,28 @@
+group = "app.web.groons.print_bluetooth_thermal"
+version = "1.0-SNAPSHOT"
+
+apply plugin: "com.android.library"
+
+android {
+    namespace = "app.web.groons.print_bluetooth_thermal"
+    compileSdk = 34
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
+    }
+
+    defaultConfig {
+        minSdk = 21
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
