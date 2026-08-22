@@ -43,47 +43,6 @@ class _RecentlyDeletedOrdersScreenState
     }
   }
 
-  Future<void> _permanentlyDelete(RestaurantOrder order) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Permanently Delete Order?'),
-        content: Text(
-          'Permanently delete ${order.orderNumber} and all of its items?\n\n'
-          'This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete Permanently'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await _repository.permanentlyDeleteOrder(order.id);
-      if (!mounted) return;
-      setState(() {
-        _orders = _orders.where((item) => item.id != order.id).toList();
-      });
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Order could not be permanently deleted.'),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Recently Deleted Orders')),
@@ -129,19 +88,15 @@ class _RecentlyDeletedOrdersScreenState
     return ListView.separated(
       itemCount: _orders.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) => _DeletedOrderCard(
-        order: _orders[index],
-        onDelete: () => _permanentlyDelete(_orders[index]),
-      ),
+      itemBuilder: (context, index) => _DeletedOrderCard(order: _orders[index]),
     );
   }
 }
 
 class _DeletedOrderCard extends StatelessWidget {
-  const _DeletedOrderCard({required this.order, required this.onDelete});
+  const _DeletedOrderCard({required this.order});
 
   final RestaurantOrder order;
-  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -151,43 +106,21 @@ class _DeletedOrderCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final details = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  order.orderNumber,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(formatOrderDateTime(order.createdAt)),
-                const SizedBox(height: 4),
-                Text(
-                  'Total: ${formatCurrency(order.total)}  •  '
-                  'Permanently deleted in $remaining day${remaining == 1 ? '' : 's'}',
-                ),
-              ],
-            );
-            final action = OutlinedButton.icon(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_forever_outlined),
-              label: const Text('Delete Permanently'),
-            );
-            if (constraints.maxWidth < 650) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [details, const SizedBox(height: 12), action],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(child: details),
-                const SizedBox(width: 16),
-                action,
-              ],
-            );
-          },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              order.orderNumber,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(formatOrderDateTime(order.createdAt)),
+            const SizedBox(height: 4),
+            Text(
+              'Total: ${formatCurrency(order.total)}  •  '
+              'Permanently deleted in $remaining day${remaining == 1 ? '' : 's'}',
+            ),
+          ],
         ),
       ),
     );

@@ -97,9 +97,6 @@ class _FakeOrderRepository implements OrderRepository {
       throw UnimplementedError();
 
   @override
-  Future<void> permanentlyDeleteOrder(int orderId) =>
-      throw UnimplementedError();
-  @override
   Future<RestaurantOrder> getOrder(int id) => throw UnimplementedError();
   @override
   Future<List<OrderItem>> getOrderItems(int orderId) =>

@@ -13,7 +13,6 @@ abstract interface class OrderRepository {
   Future<void> updateOpenOrder(int orderId, List<OrderItem> items);
   Future<void> closeOrder(int orderId);
   Future<void> deleteOrder(int orderId);
-  Future<void> permanentlyDeleteOrder(int orderId);
 }
 
 class SqliteOrderRepository implements OrderRepository {
@@ -149,17 +148,6 @@ class SqliteOrderRepository implements OrderRepository {
       whereArgs: [orderId],
     );
     if (changed != 1) throw StateError('Order not found.');
-  }
-
-  @override
-  Future<void> permanentlyDeleteOrder(int orderId) async {
-    final database = await _databaseManager.database;
-    final deleted = await database.delete(
-      'orders',
-      where: 'id = ? AND deleted_at IS NOT NULL',
-      whereArgs: [orderId],
-    );
-    if (deleted != 1) throw StateError('Deleted order not found.');
   }
 
   Future<void> _purgeExpiredDeletedOrders(Database database) async {
