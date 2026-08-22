@@ -17,7 +17,13 @@ class CurrentOrderController extends ChangeNotifier {
     OrderRepository? repository,
     ComplementEligibilityService? complementService,
   }) : _repository = repository ?? SqliteOrderRepository(),
-       _complementService = complementService ?? ComplementEligibilityService();
+       _complementService =
+           complementService ?? ComplementEligibilityService() {
+    _settingsChanges = BusinessSettingsRepository.changes.listen((settings) {
+      _businessSettings = settings;
+      notifyListeners();
+    });
+  }
 
   final OrderRepository _repository;
   final ComplementEligibilityService _complementService;
@@ -30,11 +36,7 @@ class CurrentOrderController extends ChangeNotifier {
   int _evaluationVersion = 0;
   Future<void>? _evaluation;
   BusinessSettings? _businessSettings;
-  late final StreamSubscription<BusinessSettings> _settingsChanges =
-      BusinessSettingsRepository.changes.listen((settings) {
-        _businessSettings = settings;
-        notifyListeners();
-      });
+  late final StreamSubscription<BusinessSettings> _settingsChanges;
 
   Future<void> initialize() async {
     try {

@@ -117,6 +117,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       setupCompleted: true,
     );
     try {
+      // Update the formatter before the repository broadcasts the settings
+      // change so offstage Billing/Product pages rebuild with the new symbol.
+      CurrencyFormatter.update(updated);
       await _repository.save(updated);
       if (widget.setupMode && _receiptSettings != null) {
         await ReceiptSettingsRepository().save(
@@ -126,7 +129,6 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
           ),
         );
       }
-      CurrencyFormatter.update(updated);
       if (!mounted) return;
       if (widget.setupMode) {
         Navigator.pushNamedAndRemoveUntil(
