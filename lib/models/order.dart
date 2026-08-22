@@ -19,6 +19,7 @@ class RestaurantOrder {
     required this.createdAt,
     required this.updatedAt,
     this.closedAt,
+    this.deletedAt,
   });
 
   final int id;
@@ -29,8 +30,10 @@ class RestaurantOrder {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? closedAt;
+  final DateTime? deletedAt;
 
   bool get isOpen => status == OrderStatus.open;
+  bool get isDeleted => deletedAt != null;
 
   factory RestaurantOrder.fromMap(Map<String, Object?> map) => RestaurantOrder(
     id: map['id'] as int,
@@ -43,5 +46,8 @@ class RestaurantOrder {
     closedAt: map['closed_at'] == null
         ? null
         : DateTime.parse(map['closed_at'] as String),
+    deletedAt: map['deleted_at'] == null
+        ? null
+        : DateTime.parse(map['deleted_at'] as String),
   );
 }

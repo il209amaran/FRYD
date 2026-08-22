@@ -10,7 +10,9 @@ class DatabaseManager {
 
   static final DatabaseManager instance = DatabaseManager._();
   static const _databaseName = 'fryd.db';
-  static const _databaseVersion = 10;
+  // Version 11 is used by the separately developed business-configuration
+  // branch. Keeping soft deletion at 12 lets either branch migrate safely.
+  static const _databaseVersion = 12;
   Database? _database;
 
   Future<Database> get database async => _database ??= await _open();
@@ -236,6 +238,15 @@ class DatabaseManager {
         ''');
       });
     }
+    if (oldVersion < 12) {
+      final columns = await database.rawQuery('PRAGMA table_info(orders)');
+      if (!columns.any((column) => column['name'] == 'deleted_at')) {
+        await database.execute('ALTER TABLE orders ADD COLUMN deleted_at TEXT');
+      }
+      await database.execute(
+        'CREATE INDEX IF NOT EXISTS orders_deleted_at ON orders (deleted_at)',
+      );
+    }
   }
 
   Future<void> _createComplementTable(DatabaseExecutor database) async {
@@ -258,7 +269,10 @@ class DatabaseManager {
 
   Future<void> _createOrdersTable(DatabaseExecutor database) async {
     await database.execute(
-      "CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('OPEN', 'CLOSED')), subtotal REAL NOT NULL, total REAL NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT)",
+      "CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('OPEN', 'CLOSED')), subtotal REAL NOT NULL, total REAL NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT, deleted_at TEXT)",
+    );
+    await database.execute(
+      'CREATE INDEX orders_deleted_at ON orders (deleted_at)',
     );
   }
 

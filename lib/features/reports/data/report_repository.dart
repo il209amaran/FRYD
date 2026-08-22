@@ -34,7 +34,7 @@ class SqliteReportRepository implements ReportRepository {
         COALESCE(SUM(CASE WHEN closed_at >= ? AND closed_at < ? THEN total END), 0) AS week_sales,
         COALESCE(SUM(CASE WHEN closed_at >= ? AND closed_at < ? THEN total END), 0) AS month_sales,
         COALESCE(SUM(CASE WHEN closed_at >= ? AND closed_at < ? THEN 1 ELSE 0 END), 0) AS orders_today
-      FROM orders WHERE status = 'CLOSED'
+      FROM orders WHERE status = 'CLOSED' AND deleted_at IS NULL
       ''',
       [
         today.toIso8601String(),
@@ -62,7 +62,7 @@ class SqliteReportRepository implements ReportRepository {
     final start = today.subtract(const Duration(days: 6));
     final end = today.add(const Duration(days: 1));
     final rows = await database.rawQuery(
-      "SELECT date(closed_at) AS day, COALESCE(SUM(total), 0) AS sales FROM orders WHERE status = 'CLOSED' AND closed_at >= ? AND closed_at < ? GROUP BY date(closed_at)",
+      "SELECT date(closed_at) AS day, COALESCE(SUM(total), 0) AS sales FROM orders WHERE status = 'CLOSED' AND deleted_at IS NULL AND closed_at >= ? AND closed_at < ? GROUP BY date(closed_at)",
       [start.toIso8601String(), end.toIso8601String()],
     );
     final values = {
@@ -86,7 +86,8 @@ class SqliteReportRepository implements ReportRepository {
         SUM(oi.line_total) AS sales
       FROM order_items oi
       INNER JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' AND oi.is_complementary = 0
+      WHERE o.status = 'CLOSED' AND o.deleted_at IS NULL
+        AND oi.is_complementary = 0
       GROUP BY oi.product_name, oi.item_type
       ORDER BY quantity DESC, sales DESC
       LIMIT ?
@@ -103,14 +104,15 @@ class SqliteReportRepository implements ReportRepository {
     final endExclusive = _day(to).add(const Duration(days: 1));
     final args = [start.toIso8601String(), endExclusive.toIso8601String()];
     final orderRows = await database.rawQuery(
-      "SELECT order_number, closed_at, status, total FROM orders WHERE status = 'CLOSED' AND closed_at >= ? AND closed_at < ? ORDER BY closed_at",
+      "SELECT order_number, closed_at, status, total FROM orders WHERE status = 'CLOSED' AND deleted_at IS NULL AND closed_at >= ? AND closed_at < ? ORDER BY closed_at",
       args,
     );
     final itemRows = await database.rawQuery('''
       SELECT oi.product_name, oi.item_type, SUM(oi.quantity) AS quantity,
         SUM(oi.line_total) AS sales
       FROM order_items oi INNER JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' AND oi.is_complementary = 0
+      WHERE o.status = 'CLOSED' AND o.deleted_at IS NULL
+        AND oi.is_complementary = 0
         AND o.closed_at >= ? AND o.closed_at < ?
       GROUP BY oi.product_name, oi.item_type ORDER BY quantity DESC
       ''', args);
@@ -142,7 +144,8 @@ class SqliteReportRepository implements ReportRepository {
       '''
       SELECT CAST((julianday(date(closed_at)) - julianday(?)) / 7 AS INTEGER) AS period,
         COUNT(*) AS orders, SUM(total) AS sales
-      FROM orders WHERE status = 'CLOSED' AND closed_at < ?
+      FROM orders WHERE status = 'CLOSED' AND deleted_at IS NULL
+        AND closed_at < ?
       GROUP BY period ORDER BY period
       ''',
       [
@@ -171,7 +174,8 @@ class SqliteReportRepository implements ReportRepository {
     final database = await _databaseManager.database;
     final rows = await database.rawQuery('''
       SELECT strftime('%Y-%m', closed_at) AS period, COUNT(*) AS orders,
-        SUM(total) AS sales FROM orders WHERE status = 'CLOSED'
+        SUM(total) AS sales FROM orders
+      WHERE status = 'CLOSED' AND deleted_at IS NULL
       GROUP BY period ORDER BY period
       ''');
     return rows
@@ -194,7 +198,7 @@ class SqliteReportRepository implements ReportRepository {
   Future<DateTime?> _firstClosedDate() async {
     final database = await _databaseManager.database;
     final row = (await database.rawQuery(
-      "SELECT MIN(closed_at) AS first_date FROM orders WHERE status = 'CLOSED'",
+      "SELECT MIN(closed_at) AS first_date FROM orders WHERE status = 'CLOSED' AND deleted_at IS NULL",
     )).single;
     final value = row['first_date'] as String?;
     return value == null ? null : DateTime.parse(value);
