@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/category.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../models/product.dart';
 import '../../categories/data/category_repository.dart';
 
@@ -124,7 +125,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               controller: _nameController,
               autofocus: true,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Product name',
                 prefixIcon: Icon(Icons.fastfood_outlined),
               ),
@@ -169,9 +170,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
               ],
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Price',
-                prefixText: '₹ ',
+                prefixText: '${CurrencyFormatter.symbol} ',
               ),
               validator: (value) {
                 final price = double.tryParse(value ?? '');

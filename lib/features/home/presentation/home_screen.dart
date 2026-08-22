@@ -8,7 +8,7 @@ import '../../billing/presentation/current_order_controller.dart';
 import '../../complements/presentation/complements_screen.dart';
 import '../../orders/presentation/orders_screen.dart';
 import '../../products/presentation/products_screen.dart';
-import '../../printer/presentation/printer_settings_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
 import '../../reports/presentation/reports_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _currentOrder = CurrentOrderController();
+    _currentOrder = CurrentOrderController()..initialize();
     _pages = List<Widget?>.filled(_destinations.length, null);
     _pages[0] = _createPage(0);
   }
@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     2 => const ProductsScreen(),
     3 => const ComplementsScreen(),
     4 => const ReportsScreen(),
-    _ => const PrinterSettingsScreen(),
+    _ => const SettingsScreen(),
   };
 
   void _selectPage(int index) {

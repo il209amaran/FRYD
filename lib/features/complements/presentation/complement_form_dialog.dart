@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/utils/currency_formatter.dart';
+
 import 'package:flutter/services.dart';
 
 import '../../../models/complement.dart';
@@ -81,7 +84,7 @@ class _ComplementFormDialogState extends State<ComplementFormDialog> {
             TextFormField(
               controller: _name,
               autofocus: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Complement Name',
                 prefixIcon: Icon(Icons.redeem),
               ),
@@ -98,9 +101,9 @@ class _ComplementFormDialogState extends State<ComplementFormDialog> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
               ],
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Minimum Order Value',
-                prefixText: '₹ ',
+                prefixText: '${CurrencyFormatter.symbol} ',
               ),
               validator: (value) {
                 final amount = double.tryParse(value ?? '');

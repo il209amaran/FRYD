@@ -613,6 +613,11 @@ class CurrentOrderPanel extends StatelessWidget {
               const SizedBox(height: 8),
             ],
             _TotalRow(label: 'Subtotal', value: controller.subtotal),
+            if (controller.taxAmount > 0)
+              _TotalRow(
+                label: controller.taxLabel,
+                value: controller.taxAmount,
+              ),
             const SizedBox(height: 8),
             _TotalRow(
               label: 'Grand total',
@@ -700,7 +705,7 @@ class _OrderRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '₹0',
+                    formatCurrency(0),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.w700,

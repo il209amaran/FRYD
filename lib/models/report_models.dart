@@ -4,14 +4,22 @@ class SalesSummary {
     required this.weekSales,
     required this.monthSales,
     required this.ordersToday,
+    this.paymentBreakdown = const [],
   });
 
   final double todaySales;
   final double weekSales;
   final double monthSales;
   final int ordersToday;
+  final List<PaymentCollection> paymentBreakdown;
   double get averageOrderValue =>
       ordersToday == 0 ? 0 : todaySales / ordersToday;
+}
+
+class PaymentCollection {
+  const PaymentCollection({required this.name, required this.total});
+  final String name;
+  final double total;
 }
 
 class DailySales {
@@ -38,11 +46,17 @@ class ReportOrder {
     required this.orderNumber,
     required this.closedAt,
     required this.status,
+    required this.subtotal,
+    required this.taxAmount,
+    required this.paymentMethod,
     required this.total,
   });
   final String orderNumber;
   final DateTime closedAt;
   final String status;
+  final double subtotal;
+  final double taxAmount;
+  final String paymentMethod;
   final double total;
 }
 

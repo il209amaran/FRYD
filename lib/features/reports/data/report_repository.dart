@@ -47,11 +47,26 @@ class SqliteReportRepository implements ReportRepository {
         tomorrow.toIso8601String(),
       ],
     )).single;
+    final paymentRows = await database.rawQuery(
+      '''SELECT COALESCE(payment_method_name, 'Unspecified') AS method,
+        SUM(total) AS collection FROM orders
+        WHERE status = 'CLOSED' AND closed_at >= ? AND closed_at < ?
+        GROUP BY payment_method_name ORDER BY collection DESC''',
+      [today.toIso8601String(), tomorrow.toIso8601String()],
+    );
     return SalesSummary(
       todaySales: (row['today_sales'] as num).toDouble(),
       weekSales: (row['week_sales'] as num).toDouble(),
       monthSales: (row['month_sales'] as num).toDouble(),
       ordersToday: (row['orders_today'] as num).toInt(),
+      paymentBreakdown: paymentRows
+          .map(
+            (value) => PaymentCollection(
+              name: value['method'] as String,
+              total: (value['collection'] as num).toDouble(),
+            ),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -103,7 +118,7 @@ class SqliteReportRepository implements ReportRepository {
     final endExclusive = _day(to).add(const Duration(days: 1));
     final args = [start.toIso8601String(), endExclusive.toIso8601String()];
     final orderRows = await database.rawQuery(
-      "SELECT order_number, closed_at, status, total FROM orders WHERE status = 'CLOSED' AND closed_at >= ? AND closed_at < ? ORDER BY closed_at",
+      "SELECT order_number, closed_at, status, subtotal, tax_amount, total, COALESCE(payment_method_name, 'Unspecified') AS payment_method FROM orders WHERE status = 'CLOSED' AND closed_at >= ? AND closed_at < ? ORDER BY closed_at",
       args,
     );
     final itemRows = await database.rawQuery('''
@@ -123,6 +138,9 @@ class SqliteReportRepository implements ReportRepository {
               orderNumber: row['order_number'] as String,
               closedAt: DateTime.parse(row['closed_at'] as String),
               status: row['status'] as String,
+              subtotal: (row['subtotal'] as num).toDouble(),
+              taxAmount: (row['tax_amount'] as num).toDouble(),
+              paymentMethod: row['payment_method'] as String,
               total: (row['total'] as num).toDouble(),
             ),
           )

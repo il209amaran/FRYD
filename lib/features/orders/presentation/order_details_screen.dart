@@ -7,6 +7,7 @@ import '../../../models/combo.dart';
 import '../../../models/complement.dart';
 import '../../../models/order_item.dart';
 import '../../../models/product.dart';
+import '../../../models/payment_method.dart';
 import '../../printer/presentation/printer_settings_screen.dart';
 import '../../printer/services/printer_service.dart';
 import '../../printer/services/receipt_service.dart';
@@ -53,27 +54,69 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   Future<void> _close() async {
-    final confirmed = await showDialog<bool>(
+    PaymentMethod? selected;
+    final method = await showDialog<PaymentMethod>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Close Order?'),
-        content: const Text(
-          'Confirm that payment has been received and close this order.',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Complete Payment'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Order: ${_controller.order?.orderNumber ?? ''}'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Total  ${formatCurrency(_controller.total)}',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Payment Method',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final paymentMethod in _controller.paymentMethods)
+                        ChoiceChip(
+                          label: Text(paymentMethod.name),
+                          selected: selected?.id == paymentMethod.id,
+                          onSelected: (_) =>
+                              setDialogState(() => selected = paymentMethod),
+                        ),
+                    ],
+                  ),
+                  if (_controller.paymentMethods.isEmpty)
+                    const Text(
+                      'No enabled payment methods. Enable one in Settings.',
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.pop(context, selected),
+              child: const Text('Confirm Payment'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Close Order'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) return;
-    final closed = await _controller.closeOrder();
+    if (method == null) return;
+    final closed = await _controller.closeOrder(method);
     if (!mounted) return;
     if (closed) {
       Navigator.pop(context);
@@ -386,12 +429,28 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         ),
                         const SizedBox(height: 8),
                       ],
-                      _AmountRow(label: 'Subtotal', value: _controller.total),
+                      _AmountRow(
+                        label: 'Subtotal',
+                        value: _controller.subtotal,
+                      ),
+                      if (_controller.taxAmount > 0)
+                        _AmountRow(
+                          label: _controller.taxLabel,
+                          value: _controller.taxAmount,
+                        ),
                       _AmountRow(
                         label: 'Grand Total',
                         value: _controller.total,
                         prominent: true,
                       ),
+                      if (!order.isOpen && order.paymentMethodName != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Payment: ${order.paymentMethodName}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       const SizedBox(height: 16),
                       _OrderActions(
                         isOpen: order.isOpen,
@@ -567,7 +626,7 @@ class _DetailItemRow extends StatelessWidget {
           ),
           Text(
             item.isComplementary
-                ? 'COMPLIMENTARY • ₹0'
+                ? 'COMPLIMENTARY • ${formatCurrency(0)}'
                 : '${formatCurrency(item.unitPrice)} each',
             style: const TextStyle(color: Colors.black54),
           ),

@@ -13,7 +13,16 @@ class ReportExportService {
     _removeDefaultSheet(excel);
     final orders = excel['Orders'];
     orders.appendRow(
-      _textRow(['Order Number', 'Date', 'Time', 'Status', 'Total']),
+      _textRow([
+        'Order Number',
+        'Date',
+        'Time',
+        'Status',
+        'Subtotal',
+        'Tax',
+        'Total',
+        'Payment Method',
+      ]),
     );
     for (final order in report.orders) {
       orders.appendRow([
@@ -21,7 +30,10 @@ class ReportExportService {
         TextCellValue(formatDate(order.closedAt)),
         TextCellValue(formatTime(order.closedAt)),
         TextCellValue(order.status),
+        DoubleCellValue(order.subtotal),
+        DoubleCellValue(order.taxAmount),
         DoubleCellValue(order.total),
+        TextCellValue(order.paymentMethod),
       ]);
     }
     orders.appendRow([]);

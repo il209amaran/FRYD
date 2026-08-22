@@ -8,6 +8,7 @@ import 'package:fryd/models/category.dart';
 import 'package:fryd/models/order.dart';
 import 'package:fryd/models/order_item.dart';
 import 'package:fryd/models/product.dart';
+import 'package:fryd/models/payment_method.dart';
 
 void main() {
   test('loads products, changes quantity, and completes an order', () async {
@@ -88,7 +89,8 @@ class _FakeOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<void> closeOrder(int orderId) => throw UnimplementedError();
+  Future<void> closeOrder(int orderId, PaymentMethod paymentMethod) =>
+      throw UnimplementedError();
   @override
   Future<void> deleteOrder(int orderId) => throw UnimplementedError();
   @override

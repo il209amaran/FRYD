@@ -10,7 +10,7 @@ class DatabaseManager {
 
   static final DatabaseManager instance = DatabaseManager._();
   static const _databaseName = 'fryd.db';
-  static const _databaseVersion = 10;
+  static const _databaseVersion = 11;
   Database? _database;
 
   Future<Database> get database async => _database ??= await _open();
@@ -38,6 +38,7 @@ class DatabaseManager {
       await transaction.execute(
         'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
       );
+      await _createBusinessTables(transaction, setupCompleted: false);
       await _createComboTable(transaction);
       await _createComplementTable(transaction);
       await MenuSeed.import(transaction);
@@ -236,6 +237,90 @@ class DatabaseManager {
         ''');
       });
     }
+    if (oldVersion < 11) {
+      await database.transaction((transaction) async {
+        await _createBusinessTables(transaction, setupCompleted: true);
+        final columns = await transaction.rawQuery('PRAGMA table_info(orders)');
+        final names = columns.map((column) => column['name']).toSet();
+        if (!names.contains('tax_name')) {
+          await transaction.execute(
+            "ALTER TABLE orders ADD COLUMN tax_name TEXT NOT NULL DEFAULT 'GST'",
+          );
+        }
+        if (!names.contains('tax_rate')) {
+          await transaction.execute(
+            'ALTER TABLE orders ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0',
+          );
+        }
+        if (!names.contains('tax_amount')) {
+          await transaction.execute(
+            'ALTER TABLE orders ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0',
+          );
+        }
+        if (!names.contains('payment_method_id')) {
+          await transaction.execute(
+            'ALTER TABLE orders ADD COLUMN payment_method_id INTEGER',
+          );
+        }
+        if (!names.contains('payment_method_name')) {
+          await transaction.execute(
+            'ALTER TABLE orders ADD COLUMN payment_method_name TEXT',
+          );
+        }
+      });
+    }
+  }
+
+  Future<void> _createBusinessTables(
+    DatabaseExecutor database, {
+    required bool setupCompleted,
+  }) async {
+    await database.execute(
+      'CREATE TABLE IF NOT EXISTS business_settings (id INTEGER PRIMARY KEY CHECK (id = 1), business_name TEXT NOT NULL, business_type TEXT NOT NULL, address TEXT NOT NULL, phone TEXT NOT NULL, email TEXT NOT NULL, country TEXT NOT NULL, currency_code TEXT NOT NULL, tax_registration_number TEXT NOT NULL, tax_enabled INTEGER NOT NULL, tax_name TEXT NOT NULL, tax_rate REAL NOT NULL, tax_inclusive INTEGER NOT NULL, setup_completed INTEGER NOT NULL)',
+    );
+    await database.insert('business_settings', {
+      'id': 1,
+      'business_name': 'FRYD',
+      'business_type': 'Restaurant',
+      'address': '',
+      'phone': '',
+      'email': '',
+      'country': 'India',
+      'currency_code': 'INR',
+      'tax_registration_number': '',
+      'tax_enabled': 0,
+      'tax_name': 'GST',
+      'tax_rate': 0,
+      'tax_inclusive': 0,
+      'setup_completed': setupCompleted ? 1 : 0,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await database.execute(
+      'CREATE TABLE IF NOT EXISTS receipt_settings (id INTEGER PRIMARY KEY CHECK (id = 1), show_business_name INTEGER NOT NULL, show_address INTEGER NOT NULL, show_phone INTEGER NOT NULL, show_email INTEGER NOT NULL, show_tax_number INTEGER NOT NULL, header TEXT NOT NULL, footer TEXT NOT NULL)',
+    );
+    await database.insert('receipt_settings', {
+      'id': 1,
+      'show_business_name': 1,
+      'show_address': 1,
+      'show_phone': 1,
+      'show_email': 1,
+      'show_tax_number': 1,
+      'header': 'TAKEOUT by AKILA',
+      'footer': 'Thank You!\nVisit Again :)',
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await database.execute(
+      'CREATE TABLE IF NOT EXISTS payment_methods (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE UNIQUE, enabled INTEGER NOT NULL, is_system INTEGER NOT NULL, sort_order INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
+    );
+    final now = DateTime.now().toIso8601String();
+    for (var index = 0; index < 3; index++) {
+      await database.insert('payment_methods', {
+        'name': ['Cash', 'UPI', 'Card'][index],
+        'enabled': 1,
+        'is_system': 1,
+        'sort_order': index,
+        'created_at': now,
+        'updated_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
   }
 
   Future<void> _createComplementTable(DatabaseExecutor database) async {
@@ -258,7 +343,7 @@ class DatabaseManager {
 
   Future<void> _createOrdersTable(DatabaseExecutor database) async {
     await database.execute(
-      "CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('OPEN', 'CLOSED')), subtotal REAL NOT NULL, total REAL NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT)",
+      "CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('OPEN', 'CLOSED')), subtotal REAL NOT NULL, tax_name TEXT NOT NULL DEFAULT 'GST', tax_rate REAL NOT NULL DEFAULT 0, tax_amount REAL NOT NULL DEFAULT 0, total REAL NOT NULL, payment_method_id INTEGER, payment_method_name TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT)",
     );
   }
 

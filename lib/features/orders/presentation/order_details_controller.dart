@@ -1,10 +1,15 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../models/combo.dart';
+import '../../../models/business_settings.dart';
 import '../../../models/complement.dart';
 import '../../../models/order.dart';
 import '../../../models/order_item.dart';
 import '../../../models/product.dart';
+import '../../../models/payment_method.dart';
+import '../../../core/services/tax_calculator.dart';
+import '../../business/data/business_settings_repository.dart';
+import '../../payments/data/payment_method_repository.dart';
 import '../../combos/data/combo_repository.dart';
 import '../../complements/services/complement_eligibility_service.dart';
 import '../../products/data/product_repository.dart';
@@ -17,16 +22,20 @@ class OrderDetailsController extends ChangeNotifier {
     ComboRepository? comboRepository,
     ComplementEligibilityService? complementService,
     OrderRepository? orderRepository,
+    PaymentMethodRepository? paymentMethodRepository,
   }) : _productRepository = productRepository ?? SqliteProductRepository(),
        _comboRepository = comboRepository ?? SqliteComboRepository(),
        _complementService = complementService ?? ComplementEligibilityService(),
-       _orderRepository = orderRepository ?? SqliteOrderRepository();
+       _orderRepository = orderRepository ?? SqliteOrderRepository(),
+       _paymentMethodRepository =
+           paymentMethodRepository ?? PaymentMethodRepository();
 
   final int orderId;
   final ProductRepository _productRepository;
   final ComboRepository _comboRepository;
   final ComplementEligibilityService _complementService;
   final OrderRepository _orderRepository;
+  final PaymentMethodRepository _paymentMethodRepository;
   final Map<String, OrderItem> _items = {};
   RestaurantOrder? _order;
   List<Product> _products = const [];
@@ -40,6 +49,8 @@ class OrderDetailsController extends ChangeNotifier {
   bool _selectionDismissed = false;
   int _evaluationVersion = 0;
   Future<void>? _evaluation;
+  BusinessSettings? _businessSettings;
+  List<PaymentMethod> _paymentMethods = const [];
 
   RestaurantOrder? get order => _order;
   List<Product> get products => List.unmodifiable(_products);
@@ -64,9 +75,38 @@ class OrderDetailsController extends ChangeNotifier {
       canEdit && complementaryItem != null && _eligibleComplements.length > 1;
   bool get selectionDialogOpen => _selectionDialogOpen;
   bool get canEdit => _order?.isOpen ?? false;
-  double get total => _items.values
+  List<PaymentMethod> get paymentMethods => List.unmodifiable(_paymentMethods);
+  double get subtotal => _items.values
       .where((item) => !item.isComplementary)
       .fold(0, (sum, item) => sum + item.total);
+  TaxCalculation get calculation {
+    final order = _order;
+    if (order != null && !order.isOpen) {
+      return TaxCalculation(
+        subtotal: order.subtotal,
+        taxName: order.taxName,
+        taxRate: order.taxRate,
+        taxAmount: order.taxAmount,
+        total: order.total,
+      );
+    }
+    final settings = _businessSettings;
+    return settings == null
+        ? TaxCalculation(
+            subtotal: subtotal,
+            taxName: 'Tax',
+            taxRate: 0,
+            taxAmount: 0,
+            total: subtotal,
+          )
+        : TaxCalculator.calculate(subtotal, settings);
+  }
+
+  double get taxAmount => calculation.taxAmount;
+  double get total => calculation.total;
+  String get taxLabel => calculation.taxRate == 0
+      ? calculation.taxName
+      : '${calculation.taxName} ${calculation.taxRate.toStringAsFixed(calculation.taxRate == calculation.taxRate.roundToDouble() ? 0 : 2)}%';
 
   String _key(OrderItem item) =>
       '${item.itemType.databaseValue}:${item.productId ?? item.comboId ?? item.complementId ?? item.id}';
@@ -80,11 +120,15 @@ class OrderDetailsController extends ChangeNotifier {
         _orderRepository.getOrderItems(orderId),
         _productRepository.getProducts(),
         _comboRepository.getCombos(),
+        BusinessSettingsRepository().get(),
+        _paymentMethodRepository.getAll(enabledOnly: true),
       ]);
       _order = results[0] as RestaurantOrder;
       final loadedItems = results[1] as List<OrderItem>;
       _products = results[2] as List<Product>;
       _combos = results[3] as List<Combo>;
+      _businessSettings = results[4] as BusinessSettings;
+      _paymentMethods = results[5] as List<PaymentMethod>;
       _items
         ..clear()
         ..addEntries(loadedItems.map((item) => MapEntry(_key(item), item)));
@@ -175,7 +219,7 @@ class OrderDetailsController extends ChangeNotifier {
     try {
       final current = complementaryItem;
       final result = await _complementService.evaluate(
-        paidTotal: total,
+        paidTotal: subtotal,
         selectedComplementId: current?.complementId,
       );
       if (version != _evaluationVersion) return;
@@ -228,7 +272,7 @@ class OrderDetailsController extends ChangeNotifier {
     }
   }
 
-  Future<bool> closeOrder() async {
+  Future<bool> closeOrder(PaymentMethod paymentMethod) async {
     if (!canEdit || items.isEmpty) return false;
     _isSaving = true;
     notifyListeners();
@@ -240,8 +284,10 @@ class OrderDetailsController extends ChangeNotifier {
         notifyListeners();
         return false;
       }
-      if (_isDirty) await _orderRepository.updateOpenOrder(orderId, items);
-      await _orderRepository.closeOrder(orderId);
+      // Refresh financial snapshots at payment time so the displayed tax and
+      // persisted total are identical even if tax settings changed meanwhile.
+      await _orderRepository.updateOpenOrder(orderId, items);
+      await _orderRepository.closeOrder(orderId, paymentMethod);
       return true;
     } catch (_) {
       _errorMessage = 'Order could not be closed.';

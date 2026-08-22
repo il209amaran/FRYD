@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/utils/currency_formatter.dart';
+
 import 'package:flutter/services.dart';
 
 import '../../../models/combo.dart';
@@ -92,9 +95,9 @@ class _ComboFormDialogState extends State<ComboFormDialog> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
               ],
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Price',
-                prefixText: '₹ ',
+                prefixText: '${CurrencyFormatter.symbol} ',
               ),
               validator: (value) {
                 final price = double.tryParse(value ?? '');

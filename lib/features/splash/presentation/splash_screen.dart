@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/database/database_manager.dart';
+import '../../../app/routes.dart';
+import '../../../core/utils/currency_formatter.dart';
+import '../../business/data/business_settings_repository.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({required this.nextRoute, super.key});
-
-  final String nextRoute;
+  const SplashScreen({super.key});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -21,13 +22,17 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initialize() async {
+    var nextRoute = AppRoutes.home;
     try {
       await DatabaseManager.instance.database;
+      final settings = await BusinessSettingsRepository().get();
+      CurrencyFormatter.update(settings);
+      if (!settings.setupCompleted) nextRoute = AppRoutes.setup;
     } catch (error, stackTrace) {
       debugPrint('Database initialization failed: $error\n$stackTrace');
     } finally {
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(widget.nextRoute);
+        Navigator.of(context).pushReplacementNamed(nextRoute);
       }
     }
   }

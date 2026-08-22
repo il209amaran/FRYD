@@ -46,6 +46,8 @@ class BillingController extends ChangeNotifier {
   bool get isCompleting => currentOrder.isCompleting;
   String? get errorMessage => _errorMessage ?? currentOrder.errorMessage;
   double get subtotal => currentOrder.subtotal;
+  double get taxAmount => currentOrder.taxAmount;
+  String get taxLabel => currentOrder.taxLabel;
   double get total => currentOrder.total;
 
   Future<void> loadProducts() async {

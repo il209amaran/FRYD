@@ -139,6 +139,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 24),
             _SectionCard(
+              title: 'Payment Breakdown',
+              child: summary.paymentBreakdown.isEmpty
+                  ? const Text('No closed payments recorded today.')
+                  : Column(
+                      children: [
+                        for (final payment in summary.paymentBreakdown)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(payment.name),
+                            trailing: Text(
+                              formatCurrency(payment.total),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 18),
+            _SectionCard(
               title: '7-Day Sales Trend',
               child: _SalesTrend(values: _controller.trend),
             ),

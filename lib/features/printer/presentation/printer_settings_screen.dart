@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../categories/presentation/category_order_screen.dart';
 import '../data/printer_config_repository.dart';
 import '../models/printer_config.dart';
 import '../services/printer_service.dart';
@@ -115,17 +114,15 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _openCategoryOrder() => Navigator.push<void>(
-    context,
-    MaterialPageRoute(builder: (_) => const CategoryOrderScreen()),
-  );
-
   @override
   Widget build(BuildContext context) => Padding(
     padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 700 ? 12 : 24),
     child: ListView(
       children: [
-        Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
+        Text(
+          'Receipt Printer',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
         const SizedBox(height: 24),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 680),
@@ -190,27 +187,6 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   ),
                 ],
               ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: ListTile(
-              minTileHeight: 76,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 8,
-              ),
-              leading: const Icon(Icons.format_list_numbered, size: 28),
-              title: const Text('Change Category Order in Billing'),
-              subtitle: const Text(
-                'Arrange category filters and grouped Billing sections.',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _openCategoryOrder,
             ),
           ),
         ),

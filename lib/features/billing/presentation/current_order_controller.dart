@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../../../core/services/tax_calculator.dart';
+import '../../../models/business_settings.dart';
 import '../../../models/combo.dart';
 import '../../../models/complement.dart';
 import '../../../models/order_item.dart';
 import '../../../models/product.dart';
 import '../../orders/data/order_repository.dart';
 import '../../complements/services/complement_eligibility_service.dart';
+import '../../business/data/business_settings_repository.dart';
 
 class CurrentOrderController extends ChangeNotifier {
   CurrentOrderController({
@@ -24,6 +29,22 @@ class CurrentOrderController extends ChangeNotifier {
   bool _selectionDismissed = false;
   int _evaluationVersion = 0;
   Future<void>? _evaluation;
+  BusinessSettings? _businessSettings;
+  late final StreamSubscription<BusinessSettings> _settingsChanges =
+      BusinessSettingsRepository.changes.listen((settings) {
+        _businessSettings = settings;
+        notifyListeners();
+      });
+
+  Future<void> initialize() async {
+    try {
+      _businessSettings = await BusinessSettingsRepository().get();
+      notifyListeners();
+    } catch (_) {
+      // Startup/database errors are surfaced by the owning screen; the order
+      // remains usable with its safe no-tax fallback while initialization runs.
+    }
+  }
 
   List<OrderItem> get items => List.unmodifiable([
     ..._items.values.where((item) => !item.isComplementary),
@@ -45,7 +66,20 @@ class CurrentOrderController extends ChangeNotifier {
   double get subtotal => _items.values
       .where((item) => !item.isComplementary)
       .fold(0, (sum, item) => sum + item.total);
-  double get total => subtotal;
+  TaxCalculation get calculation => _businessSettings == null
+      ? TaxCalculation(
+          subtotal: subtotal,
+          taxName: 'Tax',
+          taxRate: 0,
+          taxAmount: 0,
+          total: subtotal,
+        )
+      : TaxCalculator.calculate(subtotal, _businessSettings!);
+  double get taxAmount => calculation.taxAmount;
+  String get taxLabel => calculation.taxRate == 0
+      ? calculation.taxName
+      : '${calculation.taxName} ${calculation.taxRate.toStringAsFixed(calculation.taxRate == calculation.taxRate.roundToDouble() ? 0 : 2)}%';
+  double get total => calculation.total;
 
   String _key(OrderItem item) =>
       '${item.itemType.databaseValue}:${item.productId ?? item.comboId ?? item.complementId}';
@@ -160,5 +194,11 @@ class CurrentOrderController extends ChangeNotifier {
       _isCompleting = false;
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _settingsChanges.cancel();
+    super.dispose();
   }
 }

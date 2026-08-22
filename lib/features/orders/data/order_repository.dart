@@ -1,8 +1,11 @@
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/database_manager.dart';
+import '../../../core/services/tax_calculator.dart';
+import '../../../models/business_settings.dart';
 import '../../../models/order.dart';
 import '../../../models/order_item.dart';
+import '../../../models/payment_method.dart';
 
 abstract interface class OrderRepository {
   Future<List<RestaurantOrder>> getOrders({OrderStatus? status});
@@ -10,7 +13,7 @@ abstract interface class OrderRepository {
   Future<List<OrderItem>> getOrderItems(int orderId);
   Future<RestaurantOrder> createOrder(List<OrderItem> items);
   Future<void> updateOpenOrder(int orderId, List<OrderItem> items);
-  Future<void> closeOrder(int orderId);
+  Future<void> closeOrder(int orderId, PaymentMethod paymentMethod);
   Future<void> deleteOrder(int orderId);
 }
 
@@ -66,12 +69,15 @@ class SqliteOrderRepository implements OrderRepository {
       final now = createdAt.toIso8601String();
       final sequence = await _nextDailySequence(transaction, createdAt);
       final orderNumber = 'ORD-${sequence.toString().padLeft(4, '0')}';
-      final total = _total(items);
+      final calculation = await _calculation(transaction, items);
       final orderId = await transaction.insert('orders', {
         'order_number': orderNumber,
         'status': OrderStatus.open.databaseValue,
-        'subtotal': total,
-        'total': total,
+        'subtotal': calculation.subtotal,
+        'tax_name': calculation.taxName,
+        'tax_rate': calculation.taxRate,
+        'tax_amount': calculation.taxAmount,
+        'total': calculation.total,
         'created_at': now,
         'updated_at': now,
       });
@@ -87,10 +93,17 @@ class SqliteOrderRepository implements OrderRepository {
     final database = await _databaseManager.database;
     await database.transaction((transaction) async {
       final now = DateTime.now().toIso8601String();
-      final total = _total(items);
+      final calculation = await _calculation(transaction, items);
       final changed = await transaction.update(
         'orders',
-        {'subtotal': total, 'total': total, 'updated_at': now},
+        {
+          'subtotal': calculation.subtotal,
+          'tax_name': calculation.taxName,
+          'tax_rate': calculation.taxRate,
+          'tax_amount': calculation.taxAmount,
+          'total': calculation.total,
+          'updated_at': now,
+        },
         where: 'id = ? AND status = ?',
         whereArgs: [orderId, OrderStatus.open.databaseValue],
       );
@@ -105,7 +118,10 @@ class SqliteOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<void> closeOrder(int orderId) async {
+  Future<void> closeOrder(int orderId, PaymentMethod paymentMethod) async {
+    if (paymentMethod.id == null || !paymentMethod.enabled) {
+      throw ArgumentError('An enabled payment method is required.');
+    }
     final database = await _databaseManager.database;
     final now = DateTime.now().toIso8601String();
     final changed = await database.update(
@@ -113,6 +129,8 @@ class SqliteOrderRepository implements OrderRepository {
       {
         'status': OrderStatus.closed.databaseValue,
         'closed_at': now,
+        'payment_method_id': paymentMethod.id,
+        'payment_method_name': paymentMethod.name,
         'updated_at': now,
       },
       where: 'id = ? AND status = ?',
@@ -141,6 +159,21 @@ class SqliteOrderRepository implements OrderRepository {
 
   double _total(List<OrderItem> items) =>
       items.fold(0, (sum, item) => sum + item.total);
+
+  Future<TaxCalculation> _calculation(
+    DatabaseExecutor database,
+    List<OrderItem> items,
+  ) async {
+    final rows = await database.query(
+      'business_settings',
+      where: 'id = 1',
+      limit: 1,
+    );
+    return TaxCalculator.calculate(
+      _total(items.where((item) => !item.isComplementary).toList()),
+      BusinessSettings.fromMap(rows.single),
+    );
+  }
 
   Future<int> _nextDailySequence(
     Transaction transaction,
