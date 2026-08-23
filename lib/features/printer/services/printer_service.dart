@@ -28,7 +28,12 @@ class PrinterService {
         .toList(growable: false);
   }
 
-  Future<bool> get isConnected => PrintBluetoothThermal.connectionStatus;
+  Future<bool> get isConnected async {
+    if (!Platform.isAndroid || !await Permission.bluetoothConnect.isGranted) {
+      return false;
+    }
+    return PrintBluetoothThermal.connectionStatus;
+  }
 
   Future<void> disconnect() async {
     if (await PrintBluetoothThermal.connectionStatus) {
