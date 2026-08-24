@@ -8,6 +8,7 @@ class ReceiptBuilder {
   Future<List<int>> build({
     required RestaurantOrder order,
     required List<OrderItem> items,
+    String? customerName,
   }) async {
     final profile = await CapabilityProfile.load();
     final generator = Generator(PaperSize.mm58, profile);
@@ -31,6 +32,10 @@ class ReceiptBuilder {
     );
     bytes.addAll(generator.hr(ch: '-'));
     bytes.addAll(generator.text('Order: ${order.orderNumber}'));
+    final trimmedCustomerName = customerName?.trim();
+    if (trimmedCustomerName != null && trimmedCustomerName.isNotEmpty) {
+      bytes.addAll(generator.text('Customer: $trimmedCustomerName'));
+    }
     bytes.addAll(generator.text('Date : ${formatDate(order.createdAt)}'));
     bytes.addAll(generator.text('Time : ${formatTime(order.createdAt)}'));
     bytes.addAll(generator.hr(ch: '-'));

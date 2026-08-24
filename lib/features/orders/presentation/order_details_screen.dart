@@ -23,6 +23,7 @@ class OrderDetailsScreen extends StatefulWidget {
 class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   late final OrderDetailsController _controller;
   final ReceiptService _receiptService = ReceiptService();
+  final TextEditingController _customerNameController = TextEditingController();
   _ItemTab _selectedTab = _ItemTab.products;
   bool _isPrinting = false;
 
@@ -34,6 +35,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   @override
   void dispose() {
+    _customerNameController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -123,7 +125,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
     setState(() => _isPrinting = true);
     try {
-      await _receiptService.printOrder(widget.orderId);
+      await _receiptService.printOrder(
+        widget.orderId,
+        customerName: _customerNameController.text,
+      );
       _showMessage('Bill sent to the receipt printer.');
     } on PrinterException catch (error) {
       if (mounted) await _showPrinterError(error.message);
@@ -393,6 +398,19 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         prominent: true,
                       ),
                       const SizedBox(height: 16),
+                      if (order.isOpen) ...[
+                        TextField(
+                          controller: _customerNameController,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.done,
+                          decoration: const InputDecoration(
+                            labelText: 'Customer Name (Optional)',
+                            prefixIcon: Icon(Icons.person_outline),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       _OrderActions(
                         isOpen: order.isOpen,
                         isDirty: _controller.isDirty,
