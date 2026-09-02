@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../models/combo.dart';
@@ -13,6 +15,7 @@ import '../../payments/data/payment_method_repository.dart';
 import '../../combos/data/combo_repository.dart';
 import '../../complements/services/complement_eligibility_service.dart';
 import '../../products/data/product_repository.dart';
+import '../../settings/data/complement_settings_repository.dart';
 import '../data/order_repository.dart';
 
 class OrderDetailsController extends ChangeNotifier {
@@ -23,12 +26,19 @@ class OrderDetailsController extends ChangeNotifier {
     ComplementEligibilityService? complementService,
     OrderRepository? orderRepository,
     PaymentMethodRepository? paymentMethodRepository,
+    ComplementSettingsRepository? complementSettingsRepository,
   }) : _productRepository = productRepository ?? SqliteProductRepository(),
        _comboRepository = comboRepository ?? SqliteComboRepository(),
        _complementService = complementService ?? ComplementEligibilityService(),
        _orderRepository = orderRepository ?? SqliteOrderRepository(),
        _paymentMethodRepository =
-           paymentMethodRepository ?? PaymentMethodRepository();
+           paymentMethodRepository ?? PaymentMethodRepository(),
+       _complementSettingsRepository =
+           complementSettingsRepository ?? ComplementSettingsRepository() {
+    _complementSettingsChanges = ComplementSettingsRepository.changes.listen(
+      _applyComplementSetting,
+    );
+  }
 
   final int orderId;
   final ProductRepository _productRepository;
@@ -36,6 +46,7 @@ class OrderDetailsController extends ChangeNotifier {
   final ComplementEligibilityService _complementService;
   final OrderRepository _orderRepository;
   final PaymentMethodRepository _paymentMethodRepository;
+  final ComplementSettingsRepository _complementSettingsRepository;
   final Map<String, OrderItem> _items = {};
   RestaurantOrder? _order;
   List<Product> _products = const [];
@@ -51,14 +62,22 @@ class OrderDetailsController extends ChangeNotifier {
   Future<void>? _evaluation;
   BusinessSettings? _businessSettings;
   List<PaymentMethod> _paymentMethods = const [];
+  bool _complementsEnabled = true;
+  late final StreamSubscription<bool> _complementSettingsChanges;
 
   RestaurantOrder? get order => _order;
   List<Product> get products => List.unmodifiable(_products);
   List<Combo> get combos => List.unmodifiable(_combos);
-  List<OrderItem> get items => List.unmodifiable([
-    ..._items.values.where((item) => !item.isComplementary),
-    ..._items.values.where((item) => item.isComplementary),
-  ]);
+  List<OrderItem> get items {
+    final visibleItems = _complementsEnabled
+        ? _items.values
+        : _items.values.where((item) => !item.isComplementary);
+    return List.unmodifiable([
+      ...visibleItems.where((item) => !item.isComplementary),
+      ...visibleItems.where((item) => item.isComplementary),
+    ]);
+  }
+
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get isDirty => _isDirty;
@@ -68,11 +87,17 @@ class OrderDetailsController extends ChangeNotifier {
   OrderItem? get complementaryItem =>
       _items.values.where((item) => item.isComplementary).firstOrNull;
   bool get requiresComplementSelection =>
-      canEdit && complementaryItem == null && _eligibleComplements.length > 1;
+      _complementsEnabled &&
+      canEdit &&
+      complementaryItem == null &&
+      _eligibleComplements.length > 1;
   bool get shouldPromptComplementSelection =>
       requiresComplementSelection && !_selectionDismissed;
   bool get canChangeComplement =>
-      canEdit && complementaryItem != null && _eligibleComplements.length > 1;
+      _complementsEnabled &&
+      canEdit &&
+      complementaryItem != null &&
+      _eligibleComplements.length > 1;
   bool get selectionDialogOpen => _selectionDialogOpen;
   bool get canEdit => _order?.isOpen ?? false;
   List<PaymentMethod> get paymentMethods => List.unmodifiable(_paymentMethods);
@@ -122,6 +147,7 @@ class OrderDetailsController extends ChangeNotifier {
         _comboRepository.getCombos(),
         BusinessSettingsRepository().get(),
         _paymentMethodRepository.getAll(enabledOnly: true),
+        _complementSettingsRepository.isEnabled(),
       ]);
       _order = results[0] as RestaurantOrder;
       final loadedItems = results[1] as List<OrderItem>;
@@ -129,10 +155,15 @@ class OrderDetailsController extends ChangeNotifier {
       _combos = results[3] as List<Combo>;
       _businessSettings = results[4] as BusinessSettings;
       _paymentMethods = results[5] as List<PaymentMethod>;
+      _complementsEnabled = results[6] as bool;
       _items
         ..clear()
         ..addEntries(loadedItems.map((item) => MapEntry(_key(item), item)));
-      _isDirty = false;
+      if (!_complementsEnabled && _order!.isOpen) {
+        final removed = _removeComplements();
+        _isDirty = removed;
+      }
+      if (_complementsEnabled || !_order!.isOpen) _isDirty = false;
       _errorMessage = null;
       if (_order!.isOpen) _scheduleEvaluation();
     } catch (_) {
@@ -189,6 +220,7 @@ class OrderDetailsController extends ChangeNotifier {
   }
 
   void selectComplement(Complement complement) {
+    if (!_complementsEnabled) return;
     _items.removeWhere((_, item) => item.isComplementary);
     final item = OrderItem.fromComplement(complement);
     _items[_key(item)] = item;
@@ -207,9 +239,35 @@ class OrderDetailsController extends ChangeNotifier {
   }
 
   void _scheduleEvaluation({bool markDirty = true}) {
+    if (!_complementsEnabled) {
+      final removed = _removeComplements();
+      if (removed && markDirty) _isDirty = true;
+      notifyListeners();
+      return;
+    }
     _selectionDismissed = false;
     final version = ++_evaluationVersion;
     _evaluation = _evaluateComplements(version, markDirty: markDirty);
+  }
+
+  void _applyComplementSetting(bool enabled) {
+    _complementsEnabled = enabled;
+    _evaluationVersion++;
+    if (!enabled) {
+      final removed = canEdit && _removeComplements();
+      if (removed) _isDirty = true;
+    }
+    notifyListeners();
+    if (enabled && canEdit) _scheduleEvaluation();
+  }
+
+  bool _removeComplements() {
+    final hadComplement = _items.values.any((item) => item.isComplementary);
+    _items.removeWhere((_, item) => item.isComplementary);
+    _eligibleComplements = const [];
+    _selectionDialogOpen = false;
+    _selectionDismissed = false;
+    return hadComplement;
   }
 
   Future<void> _evaluateComplements(
@@ -295,5 +353,11 @@ class OrderDetailsController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  @override
+  void dispose() {
+    _complementSettingsChanges.cancel();
+    super.dispose();
   }
 }

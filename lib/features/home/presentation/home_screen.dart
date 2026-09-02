@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
@@ -9,6 +11,7 @@ import '../../complements/presentation/complements_screen.dart';
 import '../../orders/presentation/orders_screen.dart';
 import '../../products/presentation/products_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
+import '../../settings/data/complement_settings_repository.dart';
 import '../../reports/presentation/reports_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -18,85 +21,125 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+  _HomeSection _selectedSection = _HomeSection.billing;
   late final CurrentOrderController _currentOrder;
-  late final List<Widget?> _pages;
+  final Map<_HomeSection, Widget> _pages = {};
+  final _complementSettings = ComplementSettingsRepository();
+  late final StreamSubscription<bool> _complementSettingsChanges;
+  bool _complementsEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _currentOrder = CurrentOrderController()..initialize();
-    _pages = List<Widget?>.filled(_destinations.length, null);
-    _pages[0] = _createPage(0);
+    _pages[_HomeSection.billing] = _createPage(_HomeSection.billing);
+    _complementSettingsChanges = ComplementSettingsRepository.changes.listen(
+      _applyComplementSetting,
+    );
+    _loadComplementSetting();
+  }
+
+  Future<void> _loadComplementSetting() async {
+    try {
+      final enabled = await _complementSettings.isEnabled();
+      if (mounted) _applyComplementSetting(enabled);
+    } catch (_) {
+      // Keep complements enabled by default if settings are still unavailable
+      // during application startup.
+    }
+  }
+
+  void _applyComplementSetting(bool enabled) {
+    if (!mounted) return;
+    setState(() {
+      _complementsEnabled = enabled;
+      if (!enabled && _selectedSection == _HomeSection.complements) {
+        _selectedSection = _HomeSection.billing;
+      }
+    });
   }
 
   @override
   void dispose() {
     _currentOrder.dispose();
+    _complementSettingsChanges.cancel();
     super.dispose();
   }
 
-  static const _destinations = [
-    NavigationRailDestination(
+  List<_HomeDestination> get _destinations => [
+    const _HomeDestination(
+      section: _HomeSection.billing,
       icon: Icon(Icons.point_of_sale_outlined),
       selectedIcon: Icon(Icons.point_of_sale),
       label: Text('Billing'),
     ),
-    NavigationRailDestination(
+    const _HomeDestination(
+      section: _HomeSection.orders,
       icon: Icon(Icons.receipt_long_outlined),
       selectedIcon: Icon(Icons.receipt_long),
       label: Text('Orders'),
     ),
-    NavigationRailDestination(
+    const _HomeDestination(
+      section: _HomeSection.products,
       icon: Icon(Icons.restaurant_menu_outlined),
       selectedIcon: Icon(Icons.restaurant_menu),
       label: Text('Products'),
     ),
-    NavigationRailDestination(
-      icon: Icon(Icons.redeem_outlined),
-      selectedIcon: Icon(Icons.redeem),
-      label: Text('Complements'),
-    ),
-    NavigationRailDestination(
+    if (_complementsEnabled)
+      const _HomeDestination(
+        section: _HomeSection.complements,
+        icon: Icon(Icons.redeem_outlined),
+        selectedIcon: Icon(Icons.redeem),
+        label: Text('Complements'),
+      ),
+    const _HomeDestination(
+      section: _HomeSection.reports,
       icon: Icon(Icons.bar_chart_outlined),
       selectedIcon: Icon(Icons.bar_chart),
       label: Text('Reports'),
     ),
-    NavigationRailDestination(
+    const _HomeDestination(
+      section: _HomeSection.settings,
       icon: Icon(Icons.settings_outlined),
       selectedIcon: Icon(Icons.settings),
       label: Text('Settings'),
     ),
   ];
-  Widget _createPage(int index) => switch (index) {
-    0 => BillingScreen(
+  Widget _createPage(_HomeSection section) => switch (section) {
+    _HomeSection.billing => BillingScreen(
       currentOrder: _currentOrder,
-      onOrderCompleted: () => _selectPage(1),
+      onOrderCompleted: () => _selectPage(_HomeSection.orders),
     ),
-    1 => const OrdersScreen(),
-    2 => const ProductsScreen(),
-    3 => const ComplementsScreen(),
-    4 => const ReportsScreen(),
-    _ => const SettingsScreen(),
+    _HomeSection.orders => const OrdersScreen(),
+    _HomeSection.products => const ProductsScreen(),
+    _HomeSection.complements => const ComplementsScreen(),
+    _HomeSection.reports => const ReportsScreen(),
+    _HomeSection.settings => const SettingsScreen(),
   };
 
-  void _selectPage(int index) {
+  void _selectPage(_HomeSection section) {
     setState(() {
-      _pages[index] ??= _createPage(index);
-      _selectedIndex = index;
+      _pages[section] ??= _createPage(section);
+      _selectedSection = section;
     });
   }
 
+  int get _selectedIndex => _destinations.indexWhere(
+    (destination) => destination.section == _selectedSection,
+  );
+
   Widget get _selectedPage => Stack(
     children: [
-      for (var index = 0; index < _pages.length; index++)
-        if (_pages[index] case final page?)
-          Positioned.fill(
-            child: Offstage(
-              offstage: index != _selectedIndex,
-              child: TickerMode(enabled: index == _selectedIndex, child: page),
+      for (final entry in _pages.entries)
+        Positioned.fill(
+          child: Offstage(
+            offstage: entry.key != _selectedSection,
+            child: TickerMode(
+              enabled: entry.key == _selectedSection,
+              child: entry.value,
             ),
           ),
+        ),
     ],
   );
 
@@ -119,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
           drawer: NavigationDrawer(
             selectedIndex: _selectedIndex,
             onDestinationSelected: (index) {
-              _selectPage(index);
+              _selectPage(_destinations[index].section);
               Navigator.pop(context);
             },
             children: [
@@ -144,7 +187,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 extended: extended,
                 minExtendedWidth: 190,
                 selectedIndex: _selectedIndex,
-                onDestinationSelected: _selectPage,
+                onDestinationSelected: (index) =>
+                    _selectPage(_destinations[index].section),
                 labelType: extended
                     ? NavigationRailLabelType.none
                     : NavigationRailLabelType.all,
@@ -161,7 +205,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                destinations: _destinations,
+                destinations: [
+                  for (final destination in _destinations)
+                    NavigationRailDestination(
+                      icon: destination.icon,
+                      selectedIcon: destination.selectedIcon,
+                      label: destination.label,
+                    ),
+                ],
               ),
               Expanded(child: _selectedPage),
             ],
@@ -170,4 +221,20 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     },
   );
+}
+
+enum _HomeSection { billing, orders, products, complements, reports, settings }
+
+class _HomeDestination {
+  const _HomeDestination({
+    required this.section,
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+
+  final _HomeSection section;
+  final Widget icon;
+  final Widget selectedIcon;
+  final Widget label;
 }

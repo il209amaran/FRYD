@@ -11,22 +11,29 @@ import '../../../models/product.dart';
 import '../../orders/data/order_repository.dart';
 import '../../complements/services/complement_eligibility_service.dart';
 import '../../business/data/business_settings_repository.dart';
+import '../../settings/data/complement_settings_repository.dart';
 
 class CurrentOrderController extends ChangeNotifier {
   CurrentOrderController({
     OrderRepository? repository,
     ComplementEligibilityService? complementService,
+    ComplementSettingsRepository? complementSettingsRepository,
   }) : _repository = repository ?? SqliteOrderRepository(),
-       _complementService =
-           complementService ?? ComplementEligibilityService() {
+       _complementService = complementService ?? ComplementEligibilityService(),
+       _complementSettingsRepository =
+           complementSettingsRepository ?? ComplementSettingsRepository() {
     _settingsChanges = BusinessSettingsRepository.changes.listen((settings) {
       _businessSettings = settings;
       notifyListeners();
     });
+    _complementSettingsChanges = ComplementSettingsRepository.changes.listen(
+      _applyComplementSetting,
+    );
   }
 
   final OrderRepository _repository;
   final ComplementEligibilityService _complementService;
+  final ComplementSettingsRepository _complementSettingsRepository;
   final Map<String, OrderItem> _items = {};
   bool _isCompleting = false;
   String? _errorMessage;
@@ -37,10 +44,14 @@ class CurrentOrderController extends ChangeNotifier {
   Future<void>? _evaluation;
   BusinessSettings? _businessSettings;
   late final StreamSubscription<BusinessSettings> _settingsChanges;
+  late final StreamSubscription<bool> _complementSettingsChanges;
+  bool _complementsEnabled = true;
 
   Future<void> initialize() async {
     try {
       _businessSettings = await BusinessSettingsRepository().get();
+      _complementsEnabled = await _complementSettingsRepository.isEnabled();
+      if (!_complementsEnabled) _removeComplements();
       notifyListeners();
     } catch (_) {
       // Startup/database errors are surfaced by the owning screen; the order
@@ -59,11 +70,15 @@ class CurrentOrderController extends ChangeNotifier {
   OrderItem? get complementaryItem =>
       _items.values.where((item) => item.isComplementary).firstOrNull;
   bool get requiresComplementSelection =>
-      complementaryItem == null && _eligibleComplements.length > 1;
+      _complementsEnabled &&
+      complementaryItem == null &&
+      _eligibleComplements.length > 1;
   bool get shouldPromptComplementSelection =>
       requiresComplementSelection && !_selectionDismissed;
   bool get canChangeComplement =>
-      complementaryItem != null && _eligibleComplements.length > 1;
+      _complementsEnabled &&
+      complementaryItem != null &&
+      _eligibleComplements.length > 1;
   bool get selectionDialogOpen => _selectionDialogOpen;
   double get subtotal => _items.values
       .where((item) => !item.isComplementary)
@@ -119,6 +134,7 @@ class CurrentOrderController extends ChangeNotifier {
   }
 
   void selectComplement(Complement complement) {
+    if (!_complementsEnabled) return;
     _items.removeWhere((_, item) => item.isComplementary);
     final item = OrderItem.fromComplement(complement);
     _items[_key(item)] = item;
@@ -138,9 +154,29 @@ class CurrentOrderController extends ChangeNotifier {
   }
 
   void _scheduleEvaluation() {
+    if (!_complementsEnabled) {
+      _removeComplements();
+      notifyListeners();
+      return;
+    }
     _selectionDismissed = false;
     final version = ++_evaluationVersion;
     _evaluation = _evaluateComplements(version);
+  }
+
+  void _applyComplementSetting(bool enabled) {
+    _complementsEnabled = enabled;
+    _evaluationVersion++;
+    if (!enabled) _removeComplements();
+    notifyListeners();
+    if (enabled && _items.isNotEmpty) _scheduleEvaluation();
+  }
+
+  void _removeComplements() {
+    _items.removeWhere((_, item) => item.isComplementary);
+    _eligibleComplements = const [];
+    _selectionDialogOpen = false;
+    _selectionDismissed = false;
   }
 
   Future<void> _evaluateComplements(int version) async {
@@ -201,6 +237,7 @@ class CurrentOrderController extends ChangeNotifier {
   @override
   void dispose() {
     _settingsChanges.cancel();
+    _complementSettingsChanges.cancel();
     super.dispose();
   }
 }

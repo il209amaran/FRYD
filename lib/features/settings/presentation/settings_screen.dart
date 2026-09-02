@@ -6,9 +6,55 @@ import '../../business/presentation/tax_settings_screen.dart';
 import '../../categories/presentation/category_order_screen.dart';
 import '../../payments/presentation/payment_methods_screen.dart';
 import '../../printer/presentation/printer_settings_screen.dart';
+import '../data/complement_settings_repository.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final _complementSettings = ComplementSettingsRepository();
+  bool _complementsEnabled = true;
+  bool _isSavingComplements = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComplementSetting();
+  }
+
+  Future<void> _loadComplementSetting() async {
+    try {
+      final enabled = await _complementSettings.isEnabled();
+      if (mounted) setState(() => _complementsEnabled = enabled);
+    } catch (_) {
+      // The default remains enabled until local settings are available.
+    }
+  }
+
+  Future<void> _setComplementsEnabled(bool enabled) async {
+    setState(() {
+      _complementsEnabled = enabled;
+      _isSavingComplements = true;
+    });
+    try {
+      await _complementSettings.setEnabled(enabled);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _complementsEnabled = !enabled);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Complement setting could not be saved.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingComplements = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -25,6 +71,17 @@ class SettingsScreen extends StatelessWidget {
         ),
       ]),
       _section(context, 'BILLING', [
+        SwitchListTile(
+          secondary: const Icon(Icons.redeem_outlined),
+          title: const Text('Complimentary Items'),
+          subtitle: Text(
+            _complementsEnabled
+                ? 'Enabled in navigation and billing'
+                : 'Hidden from navigation and bills',
+          ),
+          value: _complementsEnabled,
+          onChanged: _isSavingComplements ? null : _setComplementsEnabled,
+        ),
         _item(
           context,
           Icons.percent,

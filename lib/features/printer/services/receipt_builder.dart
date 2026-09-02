@@ -5,18 +5,23 @@ import '../../../models/order.dart';
 import '../../../models/order_item.dart';
 import '../../business/data/business_settings_repository.dart';
 import '../../business/data/receipt_settings_repository.dart';
+import '../../settings/data/complement_settings_repository.dart';
 
 class ReceiptBuilder {
   ReceiptBuilder({
     BusinessSettingsRepository? businessSettingsRepository,
     ReceiptSettingsRepository? receiptSettingsRepository,
+    ComplementSettingsRepository? complementSettingsRepository,
   }) : _businessSettingsRepository =
            businessSettingsRepository ?? BusinessSettingsRepository(),
        _receiptSettingsRepository =
-           receiptSettingsRepository ?? ReceiptSettingsRepository();
+           receiptSettingsRepository ?? ReceiptSettingsRepository(),
+       _complementSettingsRepository =
+           complementSettingsRepository ?? ComplementSettingsRepository();
 
   final BusinessSettingsRepository _businessSettingsRepository;
   final ReceiptSettingsRepository _receiptSettingsRepository;
+  final ComplementSettingsRepository _complementSettingsRepository;
 
   Future<List<int>> build({
     required RestaurantOrder order,
@@ -25,6 +30,7 @@ class ReceiptBuilder {
   }) async {
     final business = await _businessSettingsRepository.get();
     final receipt = await _receiptSettingsRepository.get();
+    final complementsEnabled = await _complementSettingsRepository.isEnabled();
     final profile = await CapabilityProfile.load();
     final generator = Generator(PaperSize.mm58, profile);
     final bytes = <int>[];
@@ -74,7 +80,9 @@ class ReceiptBuilder {
     bytes.addAll(generator.text('Time : ${formatTime(order.createdAt)}'));
     bytes.addAll(generator.hr(ch: '-'));
 
-    for (final item in items) {
+    for (final item in items.where(
+      (item) => complementsEnabled || !item.isComplementary,
+    )) {
       bytes.addAll(
         generator.text(
           item.isComplementary

@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fryd/features/business/data/business_settings_repository.dart';
 import 'package:fryd/features/business/data/receipt_settings_repository.dart';
 import 'package:fryd/features/printer/services/receipt_builder.dart';
+import 'package:fryd/features/settings/data/complement_settings_repository.dart';
 import 'package:fryd/models/business_settings.dart';
 import 'package:fryd/models/order.dart';
+import 'package:fryd/models/order_item.dart';
 import 'package:fryd/models/receipt_settings.dart';
 
 void main() {
@@ -24,6 +26,7 @@ void main() {
   final builder = ReceiptBuilder(
     businessSettingsRepository: _FakeBusinessSettingsRepository(),
     receiptSettingsRepository: _FakeReceiptSettingsRepository(),
+    complementSettingsRepository: _FakeComplementSettingsRepository(),
   );
 
   test('prints a trimmed customer name when provided', () async {
@@ -49,6 +52,35 @@ void main() {
     expect(
       latin1.decode(bytes, allowInvalid: true),
       isNot(contains('Customer:')),
+    );
+  });
+
+  test('does not print complimentary items when disabled', () async {
+    final disabledBuilder = ReceiptBuilder(
+      businessSettingsRepository: _FakeBusinessSettingsRepository(),
+      receiptSettingsRepository: _FakeReceiptSettingsRepository(),
+      complementSettingsRepository: _FakeComplementSettingsRepository(false),
+    );
+    final bytes = await disabledBuilder.build(
+      order: order,
+      items: [
+        OrderItem(
+          id: 1,
+          orderId: 1,
+          productId: null,
+          comboId: null,
+          complementId: 1,
+          itemType: OrderItemType.complement,
+          productName: 'Free Burger',
+          unitPrice: 0,
+          quantity: 1,
+        ),
+      ],
+    );
+
+    expect(
+      latin1.decode(bytes, allowInvalid: true),
+      isNot(contains('Free Burger')),
     );
   });
 }
@@ -83,4 +115,13 @@ class _FakeReceiptSettingsRepository extends ReceiptSettingsRepository {
     header: '',
     footer: '',
   );
+}
+
+class _FakeComplementSettingsRepository extends ComplementSettingsRepository {
+  _FakeComplementSettingsRepository([this.enabled = true]);
+
+  final bool enabled;
+
+  @override
+  Future<bool> isEnabled() async => enabled;
 }
