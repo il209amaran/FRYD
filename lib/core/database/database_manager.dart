@@ -10,7 +10,7 @@ class DatabaseManager {
 
   static final DatabaseManager instance = DatabaseManager._();
   static const _databaseName = 'fryd.db';
-  static const _databaseVersion = 11;
+  static const _databaseVersion = 13;
   Database? _database;
 
   Future<Database> get database async => _database ??= await _open();
@@ -237,7 +237,7 @@ class DatabaseManager {
         ''');
       });
     }
-    if (oldVersion < 11) {
+    if (oldVersion < 13) {
       await database.transaction((transaction) async {
         await _createBusinessTables(transaction, setupCompleted: true);
         final columns = await transaction.rawQuery('PRAGMA table_info(orders)');
@@ -267,6 +267,14 @@ class DatabaseManager {
             'ALTER TABLE orders ADD COLUMN payment_method_name TEXT',
           );
         }
+        if (!names.contains('deleted_at')) {
+          await transaction.execute(
+            'ALTER TABLE orders ADD COLUMN deleted_at TEXT',
+          );
+        }
+        await transaction.execute(
+          'CREATE INDEX IF NOT EXISTS orders_deleted_at ON orders (deleted_at)',
+        );
       });
     }
   }
@@ -343,7 +351,10 @@ class DatabaseManager {
 
   Future<void> _createOrdersTable(DatabaseExecutor database) async {
     await database.execute(
-      "CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('OPEN', 'CLOSED')), subtotal REAL NOT NULL, tax_name TEXT NOT NULL DEFAULT 'GST', tax_rate REAL NOT NULL DEFAULT 0, tax_amount REAL NOT NULL DEFAULT 0, total REAL NOT NULL, payment_method_id INTEGER, payment_method_name TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT)",
+      "CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('OPEN', 'CLOSED')), subtotal REAL NOT NULL, tax_name TEXT NOT NULL DEFAULT 'GST', tax_rate REAL NOT NULL DEFAULT 0, tax_amount REAL NOT NULL DEFAULT 0, total REAL NOT NULL, payment_method_id INTEGER, payment_method_name TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT, deleted_at TEXT)",
+    );
+    await database.execute(
+      'CREATE INDEX orders_deleted_at ON orders (deleted_at)',
     );
   }
 

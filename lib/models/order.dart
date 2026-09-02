@@ -24,6 +24,7 @@ class RestaurantOrder {
     this.closedAt,
     this.paymentMethodId,
     this.paymentMethodName,
+    this.deletedAt,
   });
 
   final int id;
@@ -39,8 +40,10 @@ class RestaurantOrder {
   final DateTime? closedAt;
   final int? paymentMethodId;
   final String? paymentMethodName;
+  final DateTime? deletedAt;
 
   bool get isOpen => status == OrderStatus.open;
+  bool get isDeleted => deletedAt != null;
 
   factory RestaurantOrder.fromMap(Map<String, Object?> map) => RestaurantOrder(
     id: map['id'] as int,
@@ -58,5 +61,8 @@ class RestaurantOrder {
         : DateTime.parse(map['closed_at'] as String),
     paymentMethodId: map['payment_method_id'] as int?,
     paymentMethodName: map['payment_method_name'] as String?,
+    deletedAt: map['deleted_at'] == null
+        ? null
+        : DateTime.parse(map['deleted_at'] as String),
   );
 }

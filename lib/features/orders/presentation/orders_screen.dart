@@ -5,6 +5,7 @@ import '../../../core/utils/date_time_formatter.dart';
 import '../../../models/order.dart';
 import 'order_details_screen.dart';
 import 'orders_controller.dart';
+import 'recently_deleted_orders_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -39,10 +40,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Order?'),
+        title: const Text('Move Order to Recently Deleted?'),
         content: Text(
-          'Are you sure you want to permanently delete ${order.orderNumber}?\n\n'
-          'This action cannot be undone.',
+          '${order.orderNumber} will be removed from Orders and Reports. '
+          'It will be kept in Recently Deleted for 45 days before being '
+          'permanently deleted.',
         ),
         actions: [
           TextButton(
@@ -54,7 +56,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm Delete'),
+            child: const Text('Move to Recently Deleted'),
           ),
         ],
       ),
@@ -81,7 +83,31 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Orders', style: Theme.of(context).textTheme.headlineMedium),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final title = Text(
+                'Orders',
+                style: Theme.of(context).textTheme.headlineMedium,
+              );
+              final deletedButton = OutlinedButton.icon(
+                onPressed: _openRecentlyDeleted,
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: const Text('Recently Deleted'),
+              );
+              if (constraints.maxWidth < 500) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [title, const SizedBox(height: 12), deletedButton],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: title),
+                  deletedButton,
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 18),
           SegmentedButton<OrderFilter>(
             segments: const [
@@ -99,6 +125,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
     ),
   );
+
+  Future<void> _openRecentlyDeleted() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const RecentlyDeletedOrdersScreen()),
+    );
+    await _controller.loadOrders();
+  }
 
   Widget _buildBody() {
     if (_controller.isLoading) {

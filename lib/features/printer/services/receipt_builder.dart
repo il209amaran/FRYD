@@ -7,12 +7,24 @@ import '../../business/data/business_settings_repository.dart';
 import '../../business/data/receipt_settings_repository.dart';
 
 class ReceiptBuilder {
+  ReceiptBuilder({
+    BusinessSettingsRepository? businessSettingsRepository,
+    ReceiptSettingsRepository? receiptSettingsRepository,
+  }) : _businessSettingsRepository =
+           businessSettingsRepository ?? BusinessSettingsRepository(),
+       _receiptSettingsRepository =
+           receiptSettingsRepository ?? ReceiptSettingsRepository();
+
+  final BusinessSettingsRepository _businessSettingsRepository;
+  final ReceiptSettingsRepository _receiptSettingsRepository;
+
   Future<List<int>> build({
     required RestaurantOrder order,
     required List<OrderItem> items,
+    String? customerName,
   }) async {
-    final business = await BusinessSettingsRepository().get();
-    final receipt = await ReceiptSettingsRepository().get();
+    final business = await _businessSettingsRepository.get();
+    final receipt = await _receiptSettingsRepository.get();
     final profile = await CapabilityProfile.load();
     final generator = Generator(PaperSize.mm58, profile);
     final bytes = <int>[];
@@ -54,6 +66,10 @@ class ReceiptBuilder {
     }
     bytes.addAll(generator.hr(ch: '-'));
     bytes.addAll(generator.text('Order: ${order.orderNumber}'));
+    final trimmedCustomerName = customerName?.trim();
+    if (trimmedCustomerName != null && trimmedCustomerName.isNotEmpty) {
+      bytes.addAll(generator.text('Customer: $trimmedCustomerName'));
+    }
     bytes.addAll(generator.text('Date : ${formatDate(order.createdAt)}'));
     bytes.addAll(generator.text('Time : ${formatTime(order.createdAt)}'));
     bytes.addAll(generator.hr(ch: '-'));

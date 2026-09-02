@@ -27,14 +27,17 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   }
 
   Future<void> _load() async {
-    final printer = await _repository.getSelectedPrinter();
-    final connected = await _printerService.isConnected;
-    if (!mounted) return;
-    setState(() {
-      _printer = printer;
-      _connected = connected;
-      _busy = false;
-    });
+    try {
+      final printer = await _repository.getSelectedPrinter();
+      final connected = await _printerService.isConnected;
+      if (!mounted) return;
+      setState(() {
+        _printer = printer;
+        _connected = connected;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _selectPrinter() async {
@@ -182,7 +185,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Pair the SHREYANS printer in Android Bluetooth settings before selecting it here.',
+                    'Pair the receipt printer in Android Bluetooth settings before selecting it here.',
                     style: TextStyle(color: Colors.black54),
                   ),
                 ],

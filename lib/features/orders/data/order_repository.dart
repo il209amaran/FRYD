@@ -9,6 +9,7 @@ import '../../../models/payment_method.dart';
 
 abstract interface class OrderRepository {
   Future<List<RestaurantOrder>> getOrders({OrderStatus? status});
+  Future<List<RestaurantOrder>> getDeletedOrders();
   Future<RestaurantOrder> getOrder(int id);
   Future<List<OrderItem>> getOrderItems(int orderId);
   Future<RestaurantOrder> createOrder(List<OrderItem> items);
@@ -26,11 +27,26 @@ class SqliteOrderRepository implements OrderRepository {
   @override
   Future<List<RestaurantOrder>> getOrders({OrderStatus? status}) async {
     final database = await _databaseManager.database;
+    await _purgeExpiredDeletedOrders(database);
     final rows = await database.query(
       'orders',
-      where: status == null ? null : 'status = ?',
+      where: status == null
+          ? 'deleted_at IS NULL'
+          : 'status = ? AND deleted_at IS NULL',
       whereArgs: status == null ? null : [status.databaseValue],
       orderBy: 'created_at DESC, id DESC',
+    );
+    return rows.map(RestaurantOrder.fromMap).toList(growable: false);
+  }
+
+  @override
+  Future<List<RestaurantOrder>> getDeletedOrders() async {
+    final database = await _databaseManager.database;
+    await _purgeExpiredDeletedOrders(database);
+    final rows = await database.query(
+      'orders',
+      where: 'deleted_at IS NOT NULL',
+      orderBy: 'deleted_at DESC, id DESC',
     );
     return rows.map(RestaurantOrder.fromMap).toList(growable: false);
   }
@@ -40,7 +56,7 @@ class SqliteOrderRepository implements OrderRepository {
     final database = await _databaseManager.database;
     final rows = await database.query(
       'orders',
-      where: 'id = ?',
+      where: 'id = ? AND deleted_at IS NULL',
       whereArgs: [id],
       limit: 1,
     );
@@ -142,19 +158,25 @@ class SqliteOrderRepository implements OrderRepository {
   @override
   Future<void> deleteOrder(int orderId) async {
     final database = await _databaseManager.database;
-    await database.transaction((transaction) async {
-      await transaction.delete(
-        'order_items',
-        where: 'order_id = ?',
-        whereArgs: [orderId],
-      );
-      final deleted = await transaction.delete(
-        'orders',
-        where: 'id = ?',
-        whereArgs: [orderId],
-      );
-      if (deleted != 1) throw StateError('Order not found.');
-    });
+    final now = DateTime.now().toIso8601String();
+    final changed = await database.update(
+      'orders',
+      {'deleted_at': now, 'updated_at': now},
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [orderId],
+    );
+    if (changed != 1) throw StateError('Order not found.');
+  }
+
+  Future<void> _purgeExpiredDeletedOrders(Database database) async {
+    final cutoff = DateTime.now()
+        .subtract(const Duration(days: 45))
+        .toIso8601String();
+    await database.delete(
+      'orders',
+      where: 'deleted_at IS NOT NULL AND deleted_at <= ?',
+      whereArgs: [cutoff],
+    );
   }
 
   double _total(List<OrderItem> items) =>

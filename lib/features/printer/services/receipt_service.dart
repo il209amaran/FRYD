@@ -21,7 +21,7 @@ class ReceiptService {
   final PrinterService _printerService;
   final ReceiptBuilder _receiptBuilder;
 
-  Future<void> printOrder(int orderId) async {
+  Future<void> printOrder(int orderId, {String? customerName}) async {
     final printer = await _configRepository.getSelectedPrinter();
     if (printer == null) {
       throw const PrinterException(
@@ -35,6 +35,7 @@ class ReceiptService {
     final bytes = await _receiptBuilder.build(
       order: results[0] as RestaurantOrder,
       items: results[1] as List<OrderItem>,
+      customerName: customerName,
     );
     await _printerService.printBytes(printer, bytes);
   }
