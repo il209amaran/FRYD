@@ -8,7 +8,9 @@ import 'orders_controller.dart';
 import 'recently_deleted_orders_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({super.key});
+  const OrdersScreen({this.refreshListenable, super.key});
+
+  final Listenable? refreshListenable;
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -21,13 +23,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
   void initState() {
     super.initState();
     _controller = OrdersController()..loadOrders();
+    widget.refreshListenable?.addListener(_refreshOrders);
+  }
+
+  @override
+  void didUpdateWidget(covariant OrdersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshListenable == widget.refreshListenable) return;
+    oldWidget.refreshListenable?.removeListener(_refreshOrders);
+    widget.refreshListenable?.addListener(_refreshOrders);
   }
 
   @override
   void dispose() {
+    widget.refreshListenable?.removeListener(_refreshOrders);
     _controller.dispose();
     super.dispose();
   }
+
+  void _refreshOrders() => _controller.loadOrders();
 
   Future<void> _openOrder(RestaurantOrder order) async {
     await Navigator.of(context).push<void>(
@@ -118,6 +132,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
             selected: {_controller.filter},
             onSelectionChanged: (selection) =>
                 _controller.setFilter(selection.single),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Showing orders from today and the previous 2 days',
+            style: TextStyle(color: Colors.black54),
           ),
           const SizedBox(height: 18),
           Expanded(child: _buildBody()),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_time_formatter.dart';
 import '../../../models/report_models.dart';
+import 'closed_orders_history_screen.dart';
 import 'reports_controller.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -88,7 +89,39 @@ class _ReportsScreenState extends State<ReportsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Reports', style: Theme.of(context).textTheme.headlineMedium),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final title = Text(
+                  'Reports',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                );
+                final historyButton = OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => const ClosedOrdersHistoryScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: const Text('View All Closed Orders'),
+                );
+                if (constraints.maxWidth < 560) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      title,
+                      const SizedBox(height: 12),
+                      historyButton,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: title),
+                    historyButton,
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 18),
             LayoutBuilder(
               builder: (context, constraints) {

@@ -102,8 +102,10 @@ class _FakeOrderRepository implements OrderRepository {
   Future<List<OrderItem>> getOrderItems(int orderId) =>
       throw UnimplementedError();
   @override
-  Future<List<RestaurantOrder>> getOrders({OrderStatus? status}) =>
-      throw UnimplementedError();
+  Future<List<RestaurantOrder>> getOrders({
+    OrderStatus? status,
+    DateTime? createdFrom,
+  }) => throw UnimplementedError();
   @override
   Future<void> updateOpenOrder(int orderId, List<OrderItem> items) =>
       throw UnimplementedError();

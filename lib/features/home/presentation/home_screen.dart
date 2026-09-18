@@ -20,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   late final CurrentOrderController _currentOrder;
+  final ValueNotifier<int> _ordersRefresh = ValueNotifier(0);
   late final List<Widget?> _pages;
 
   @override
@@ -33,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _currentOrder.dispose();
+    _ordersRefresh.dispose();
     super.dispose();
   }
 
@@ -73,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       currentOrder: _currentOrder,
       onOrderCompleted: () => _selectPage(1),
     ),
-    1 => const OrdersScreen(),
+    1 => OrdersScreen(refreshListenable: _ordersRefresh),
     2 => const ProductsScreen(),
     3 => const ComplementsScreen(),
     4 => const ReportsScreen(),
@@ -85,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _pages[index] ??= _createPage(index);
       _selectedIndex = index;
     });
+    if (index == 1) _ordersRefresh.value++;
   }
 
   Widget get _selectedPage => Stack(
