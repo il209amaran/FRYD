@@ -1,5 +1,5 @@
-name: fryd
-description: "FRYD offline restaurant billing and POS application."
+name: kanakki
+description: "Kanakki offline billing and point-of-sale application."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -65,13 +65,14 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - images/appsplash.png
+    - images/splash_potrait.png
+    - images/splash_landscape.png
 
 flutter_launcher_icons:
   android: true
-  image_path: images/applogo.png
-  adaptive_icon_background: "#FFF3E0"
-  adaptive_icon_foreground: images/applogo.png
+  image_path: images/logo.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: images/logo.png
   min_sdk_android: 21
 
   # To add assets to your application, add an assets section, like this:

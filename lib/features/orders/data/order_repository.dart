@@ -8,7 +8,10 @@ import '../../../models/order_item.dart';
 import '../../../models/payment_method.dart';
 
 abstract interface class OrderRepository {
-  Future<List<RestaurantOrder>> getOrders({OrderStatus? status});
+  Future<List<RestaurantOrder>> getOrders({
+    OrderStatus? status,
+    DateTime? createdFrom,
+  });
   Future<List<RestaurantOrder>> getDeletedOrders();
   Future<RestaurantOrder> getOrder(int id);
   Future<List<OrderItem>> getOrderItems(int orderId);
@@ -25,15 +28,26 @@ class SqliteOrderRepository implements OrderRepository {
   final DatabaseManager _databaseManager;
 
   @override
-  Future<List<RestaurantOrder>> getOrders({OrderStatus? status}) async {
+  Future<List<RestaurantOrder>> getOrders({
+    OrderStatus? status,
+    DateTime? createdFrom,
+  }) async {
     final database = await _databaseManager.database;
     await _purgeExpiredDeletedOrders(database);
+    final conditions = <String>['deleted_at IS NULL'];
+    final arguments = <Object?>[];
+    if (status != null) {
+      conditions.add('status = ?');
+      arguments.add(status.databaseValue);
+    }
+    if (createdFrom != null) {
+      conditions.add('created_at >= ?');
+      arguments.add(createdFrom.toIso8601String());
+    }
     final rows = await database.query(
       'orders',
-      where: status == null
-          ? 'deleted_at IS NULL'
-          : 'status = ? AND deleted_at IS NULL',
-      whereArgs: status == null ? null : [status.databaseValue],
+      where: conditions.join(' AND '),
+      whereArgs: arguments,
       orderBy: 'created_at DESC, id DESC',
     );
     return rows.map(RestaurantOrder.fromMap).toList(growable: false);

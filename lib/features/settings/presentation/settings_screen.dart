@@ -6,6 +6,7 @@ import '../../business/presentation/tax_settings_screen.dart';
 import '../../categories/presentation/category_order_screen.dart';
 import '../../payments/presentation/payment_methods_screen.dart';
 import '../../printer/presentation/printer_settings_screen.dart';
+import '../data/combo_settings_repository.dart';
 import '../data/complement_settings_repository.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -17,13 +18,26 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _complementSettings = ComplementSettingsRepository();
-  bool _complementsEnabled = true;
+  final _comboSettings = ComboSettingsRepository();
+  bool _complementsEnabled = false;
+  bool _combosEnabled = false;
   bool _isSavingComplements = false;
+  bool _isSavingCombos = false;
 
   @override
   void initState() {
     super.initState();
     _loadComplementSetting();
+    _loadComboSetting();
+  }
+
+  Future<void> _loadComboSetting() async {
+    try {
+      final enabled = await _comboSettings.isEnabled();
+      if (mounted) setState(() => _combosEnabled = enabled);
+    } catch (_) {
+      // The default remains disabled until local settings are available.
+    }
   }
 
   Future<void> _loadComplementSetting() async {
@@ -31,7 +45,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final enabled = await _complementSettings.isEnabled();
       if (mounted) setState(() => _complementsEnabled = enabled);
     } catch (_) {
-      // The default remains enabled until local settings are available.
+      // The default remains disabled until local settings are available.
+    }
+  }
+
+  Future<void> _setCombosEnabled(bool enabled) async {
+    setState(() {
+      _combosEnabled = enabled;
+      _isSavingCombos = true;
+    });
+    try {
+      await _comboSettings.setEnabled(enabled);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _combosEnabled = !enabled);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Combo setting could not be saved.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingCombos = false);
     }
   }
 
@@ -71,6 +104,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ]),
       _section(context, 'BILLING', [
+        SwitchListTile(
+          secondary: const Icon(Icons.fastfood_outlined),
+          title: const Text('Combos'),
+          subtitle: Text(
+            _combosEnabled
+                ? 'Available in Billing and Order Details'
+                : 'Hidden from Billing and Order Details',
+          ),
+          value: _combosEnabled,
+          onChanged: _isSavingCombos ? null : _setCombosEnabled,
+        ),
         SwitchListTile(
           secondary: const Icon(Icons.redeem_outlined),
           title: const Text('Complimentary Items'),

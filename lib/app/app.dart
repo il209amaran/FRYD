@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import 'routes.dart';
 import 'theme.dart';
 
-class FrydApp extends StatelessWidget {
-  const FrydApp({super.key});
+class KanakkiApp extends StatelessWidget {
+  const KanakkiApp({super.key});
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'FRYD',
+    title: 'Kanakki',
     debugShowCheckedModeBanner: false,
-    theme: FrydTheme.light,
+    theme: KanakkiTheme.light,
     initialRoute: AppRoutes.splash,
     routes: AppRoutes.routes,
   );

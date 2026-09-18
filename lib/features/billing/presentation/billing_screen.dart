@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/utils/currency_formatter.dart';
@@ -10,6 +12,7 @@ import '../../../models/order_item.dart';
 import '../../../models/product.dart';
 import '../../combos/presentation/combo_management_screen.dart';
 import '../../combos/presentation/combos_controller.dart';
+import '../../settings/data/combo_settings_repository.dart';
 import 'billing_controller.dart';
 import 'current_order_controller.dart';
 
@@ -33,6 +36,10 @@ class _BillingScreenState extends State<BillingScreen> {
   late final Listenable _pageListenable;
   bool _showCombos = false;
   bool _groupByCategory = false;
+  _BillingPane _compactPane = _BillingPane.items;
+  final _comboSettings = ComboSettingsRepository();
+  late final StreamSubscription<bool> _comboSettingsChanges;
+  bool _combosEnabled = false;
 
   @override
   void initState() {
@@ -42,12 +49,34 @@ class _BillingScreenState extends State<BillingScreen> {
     _combosController = CombosController(currentOrder: widget.currentOrder)
       ..load();
     _pageListenable = Listenable.merge([_controller, _combosController]);
+    _comboSettingsChanges = ComboSettingsRepository.changes.listen(
+      _applyComboSetting,
+    );
+    _loadComboSetting();
+  }
+
+  Future<void> _loadComboSetting() async {
+    try {
+      final enabled = await _comboSettings.isEnabled();
+      if (mounted) _applyComboSetting(enabled);
+    } catch (_) {
+      // Keep combos disabled while local settings initialize.
+    }
+  }
+
+  void _applyComboSetting(bool enabled) {
+    if (!mounted) return;
+    setState(() {
+      _combosEnabled = enabled;
+      if (!enabled) _showCombos = false;
+    });
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _combosController.dispose();
+    _comboSettingsChanges.cancel();
     super.dispose();
   }
 
@@ -67,13 +96,17 @@ class _BillingScreenState extends State<BillingScreen> {
       listenable: _pageListenable,
       builder: (context, _) => LayoutBuilder(
         builder: (context, constraints) {
-          final sideBySide =
-              constraints.maxWidth >= ResponsiveBreakpoints.mobile;
+          final sideBySide = ResponsiveBreakpoints.isWide(constraints.maxWidth);
+          final usePaneSwitcher =
+              ResponsiveBreakpoints.isMobile(constraints.maxWidth) ||
+              constraints.maxHeight < 600;
           final orderWidth = (constraints.maxWidth * 0.34).clamp(300.0, 410.0);
           final menu = _MenuArea(
             controller: _controller,
             combosController: _combosController,
+            showAddFeedback: usePaneSwitcher,
             showCombos: _showCombos,
+            combosEnabled: _combosEnabled,
             groupByCategory: _groupByCategory,
             onShowCombos: () => setState(() => _showCombos = true),
             onShowProducts: () => setState(() => _showCombos = false),
@@ -85,6 +118,21 @@ class _BillingScreenState extends State<BillingScreen> {
             controller: widget.currentOrder,
             onOrderCompleted: widget.onOrderCompleted,
           );
+          if (usePaneSwitcher) {
+            return Column(
+              children: [
+                _BillingPaneSwitcher(
+                  selected: _compactPane,
+                  itemCount: widget.currentOrder.items.length,
+                  onChanged: (pane) => setState(() => _compactPane = pane),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: _compactPane == _BillingPane.items ? menu : order,
+                ),
+              ],
+            );
+          }
           if (!sideBySide) {
             return Column(
               children: [
@@ -106,11 +154,56 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 }
 
+enum _BillingPane { items, order }
+
+class _BillingPaneSwitcher extends StatelessWidget {
+  const _BillingPaneSwitcher({
+    required this.selected,
+    required this.itemCount,
+    required this.onChanged,
+  });
+
+  final _BillingPane selected;
+  final int itemCount;
+  final ValueChanged<_BillingPane> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    bottom: false,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<_BillingPane>(
+          expandedInsets: EdgeInsets.zero,
+          segments: [
+            const ButtonSegment(
+              value: _BillingPane.items,
+              icon: Icon(Icons.restaurant_menu),
+              label: Text('Items'),
+            ),
+            ButtonSegment(
+              value: _BillingPane.order,
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: Text('Current Order ($itemCount)'),
+            ),
+          ],
+          selected: {selected},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) => onChanged(selection.single),
+        ),
+      ),
+    ),
+  );
+}
+
 class _MenuArea extends StatelessWidget {
   const _MenuArea({
     required this.controller,
     required this.combosController,
+    required this.showAddFeedback,
     required this.showCombos,
+    required this.combosEnabled,
     required this.groupByCategory,
     required this.onShowCombos,
     required this.onShowProducts,
@@ -119,12 +212,43 @@ class _MenuArea extends StatelessWidget {
   });
   final BillingController controller;
   final CombosController combosController;
+  final bool showAddFeedback;
   final bool showCombos;
+  final bool combosEnabled;
   final bool groupByCategory;
   final VoidCallback onShowCombos;
   final VoidCallback onShowProducts;
   final ValueChanged<bool> onGroupingChanged;
   final VoidCallback onManageCombos;
+
+  void _addProduct(BuildContext context, Product product) {
+    controller.addProduct(product);
+    if (!showAddFeedback) return;
+
+    final quantity = controller.orderItems
+        .where(
+          (item) =>
+              item.itemType == OrderItemType.product &&
+              (product.id != null
+                  ? item.productId == product.id
+                  : item.productName == product.name),
+        )
+        .first
+        .quantity;
+    final message = quantity == 1
+        ? '${product.name} added to the order'
+        : '$quantity ${product.name} added to the current order';
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message, textAlign: TextAlign.center),
+        duration: const Duration(milliseconds: 500),
+        behavior: SnackBarBehavior.floating,
+        width: (MediaQuery.sizeOf(context).width - 32).clamp(0, 360).toDouble(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -205,11 +329,12 @@ class _MenuArea extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: onShowCombos,
-                  icon: const Icon(Icons.fastfood),
-                  label: const Text('Combos'),
-                ),
+                if (combosEnabled)
+                  OutlinedButton.icon(
+                    onPressed: onShowCombos,
+                    icon: const Icon(Icons.fastfood),
+                    label: const Text('Combos'),
+                  ),
               ],
             ),
           if (!showCombos &&
@@ -267,7 +392,7 @@ class _MenuArea extends StatelessWidget {
                 ? _GroupedProductMenu(
                     categories: controller.categories,
                     products: controller.visibleProducts,
-                    onTap: controller.addProduct,
+                    onTap: (product) => _addProduct(context, product),
                   )
                 : LayoutBuilder(
                     builder: (context, constraints) {
@@ -282,7 +407,7 @@ class _MenuArea extends StatelessWidget {
                             ),
                         itemBuilder: (context, index) => _ProductCard(
                           product: controller.visibleProducts[index],
-                          onTap: controller.addProduct,
+                          onTap: (product) => _addProduct(context, product),
                         ),
                       );
                     },
@@ -557,116 +682,135 @@ class CurrentOrderPanel extends StatelessWidget {
         if (context.mounted) _selectComplement(context);
       });
     }
-    return ColoredBox(
-      color: Colors.white,
-      child: Padding(
-        padding: mobile
-            ? const EdgeInsets.fromLTRB(12, 10, 12, 10)
-            : const EdgeInsets.fromLTRB(20, 22, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Current order',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${controller.items.length} items',
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: Colors.black54),
-            ),
-            const Divider(height: 28),
-            Expanded(
-              child: controller.items.isEmpty
-                  ? const _EmptyOrder()
-                  : ListView.separated(
-                      itemCount: controller.items.length,
-                      separatorBuilder: (_, _) => const Divider(height: 22),
-                      itemBuilder: (context, index) => _OrderRow(
-                        item: controller.items[index],
-                        controller: controller,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shortWindow = constraints.maxHeight < 400;
+        return ColoredBox(
+          color: Colors.white,
+          child: Padding(
+            padding: shortWindow
+                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6)
+                : mobile
+                ? const EdgeInsets.fromLTRB(12, 10, 12, 10)
+                : const EdgeInsets.fromLTRB(20, 22, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Current order',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${controller.items.length} items',
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: Colors.black54),
+                ),
+                Divider(height: shortWindow ? 12 : 28),
+                Expanded(
+                  child: controller.items.isEmpty
+                      ? _EmptyOrder(compact: shortWindow)
+                      : ListView.separated(
+                          itemCount: controller.items.length,
+                          separatorBuilder: (_, _) => const Divider(height: 22),
+                          itemBuilder: (context, index) => _OrderRow(
+                            item: controller.items[index],
+                            controller: controller,
+                          ),
+                        ),
+                ),
+                Divider(height: shortWindow ? 12 : 24),
+                if (controller.requiresComplementSelection) ...[
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      controller.beginComplementSelection();
+                      _selectComplement(context);
+                    },
+                    icon: const Icon(Icons.redeem),
+                    label: const Text('Select Complement'),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (controller.canChangeComplement) ...[
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      controller.beginComplementSelection();
+                      _selectComplement(context);
+                    },
+                    icon: const Icon(Icons.redeem),
+                    label: const Text('Change Complement'),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                _TotalRow(label: 'Subtotal', value: controller.subtotal),
+                if (controller.taxAmount > 0)
+                  _TotalRow(
+                    label: controller.taxLabel,
+                    value: controller.taxAmount,
+                  ),
+                SizedBox(height: shortWindow ? 2 : 8),
+                _TotalRow(
+                  label: 'Grand total',
+                  value: controller.total,
+                  prominent: true,
+                ),
+                SizedBox(height: shortWindow ? 6 : 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: shortWindow ? 46 : 58,
+                  child: FilledButton.icon(
+                    onPressed:
+                        controller.items.isEmpty || controller.isCompleting
+                        ? null
+                        : () => _complete(context),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: Text(
+                      controller.isCompleting
+                          ? 'Completing…'
+                          : 'Complete Order',
+                      style: TextStyle(
+                        fontSize: shortWindow ? 16 : 18,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-            ),
-            const Divider(height: 24),
-            if (controller.requiresComplementSelection) ...[
-              OutlinedButton.icon(
-                onPressed: () {
-                  controller.beginComplementSelection();
-                  _selectComplement(context);
-                },
-                icon: const Icon(Icons.redeem),
-                label: const Text('Select Complement'),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (controller.canChangeComplement) ...[
-              OutlinedButton.icon(
-                onPressed: () {
-                  controller.beginComplementSelection();
-                  _selectComplement(context);
-                },
-                icon: const Icon(Icons.redeem),
-                label: const Text('Change Complement'),
-              ),
-              const SizedBox(height: 8),
-            ],
-            _TotalRow(label: 'Subtotal', value: controller.subtotal),
-            if (controller.taxAmount > 0)
-              _TotalRow(
-                label: controller.taxLabel,
-                value: controller.taxAmount,
-              ),
-            const SizedBox(height: 8),
-            _TotalRow(
-              label: 'Grand total',
-              value: controller.total,
-              prominent: true,
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 58,
-              child: FilledButton.icon(
-                onPressed: controller.items.isEmpty || controller.isCompleting
-                    ? null
-                    : () => _complete(context),
-                icon: const Icon(Icons.check_circle_outline),
-                label: Text(
-                  controller.isCompleting ? 'Completing…' : 'Complete Order',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
 class _EmptyOrder extends StatelessWidget {
-  const _EmptyOrder();
+  const _EmptyOrder({this.compact = false});
+  final bool compact;
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.receipt_long_outlined, size: 48, color: Colors.black26),
-        SizedBox(height: 12),
-        Text(
+        if (!compact) ...[
+          const Icon(
+            Icons.receipt_long_outlined,
+            size: 48,
+            color: Colors.black26,
+          ),
+          const SizedBox(height: 12),
+        ],
+        const Text(
           'Your order is empty',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        SizedBox(height: 4),
-        Text(
-          'Tap a menu item to add it',
-          style: TextStyle(color: Colors.black45),
-        ),
+        if (!compact) ...[
+          const SizedBox(height: 4),
+          const Text(
+            'Tap a menu item to add it',
+            style: TextStyle(color: Colors.black45),
+          ),
+        ],
       ],
     ),
   );

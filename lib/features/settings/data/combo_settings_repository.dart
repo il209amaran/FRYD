@@ -4,11 +4,11 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/database_manager.dart';
 
-class ComplementSettingsRepository {
-  ComplementSettingsRepository({DatabaseManager? databaseManager})
+class ComboSettingsRepository {
+  ComboSettingsRepository({DatabaseManager? databaseManager})
     : _databaseManager = databaseManager ?? DatabaseManager.instance;
 
-  static const _key = 'complements_enabled';
+  static const _key = 'combos_enabled';
   static final _changes = StreamController<bool>.broadcast();
 
   final DatabaseManager _databaseManager;

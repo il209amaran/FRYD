@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/utils/currency_formatter.dart';
@@ -11,6 +13,7 @@ import '../../../models/payment_method.dart';
 import '../../printer/presentation/printer_settings_screen.dart';
 import '../../printer/services/printer_service.dart';
 import '../../printer/services/receipt_service.dart';
+import '../../settings/data/combo_settings_repository.dart';
 import 'order_details_controller.dart';
 
 class OrderDetailsScreen extends StatefulWidget {
@@ -26,18 +29,44 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   final ReceiptService _receiptService = ReceiptService();
   final TextEditingController _customerNameController = TextEditingController();
   _ItemTab _selectedTab = _ItemTab.products;
+  _OrderDetailsPane _compactPane = _OrderDetailsPane.order;
   bool _isPrinting = false;
+  final _comboSettings = ComboSettingsRepository();
+  late final StreamSubscription<bool> _comboSettingsChanges;
+  bool _combosEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _controller = OrderDetailsController(orderId: widget.orderId)..load();
+    _comboSettingsChanges = ComboSettingsRepository.changes.listen(
+      _applyComboSetting,
+    );
+    _loadComboSetting();
+  }
+
+  Future<void> _loadComboSetting() async {
+    try {
+      final enabled = await _comboSettings.isEnabled();
+      if (mounted) _applyComboSetting(enabled);
+    } catch (_) {
+      // Keep combos disabled while local settings initialize.
+    }
+  }
+
+  void _applyComboSetting(bool enabled) {
+    if (!mounted) return;
+    setState(() {
+      _combosEnabled = enabled;
+      if (!enabled) _selectedTab = _ItemTab.products;
+    });
   }
 
   @override
   void dispose() {
     _customerNameController.dispose();
     _controller.dispose();
+    _comboSettingsChanges.cancel();
     super.dispose();
   }
 
@@ -320,174 +349,239 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             if (mounted) _selectComplement();
           });
         }
-        final narrow = MediaQuery.sizeOf(context).width < 700;
-        return Flex(
-          direction: narrow ? Axis.vertical : Axis.horizontal,
+        final size = MediaQuery.sizeOf(context);
+        final narrow = size.width < 1000;
+        final usePaneSwitcher =
+            order.isOpen && (size.width < 700 || size.height < 600);
+        final content = Flex(
+          direction: narrow && !usePaneSwitcher
+              ? Axis.vertical
+              : Axis.horizontal,
           children: [
             if (order.isOpen)
-              Expanded(
-                flex: 3,
-                child: Padding(
-                  padding: narrow
-                      ? const EdgeInsets.all(12)
-                      : const EdgeInsets.fromLTRB(24, 20, 16, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Add items',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 12),
-                      SegmentedButton<_ItemTab>(
-                        segments: const [
-                          ButtonSegment(
-                            value: _ItemTab.products,
-                            icon: Icon(Icons.restaurant_menu),
-                            label: Text('Products'),
-                          ),
-                          ButtonSegment(
-                            value: _ItemTab.combos,
-                            icon: Icon(Icons.fastfood),
-                            label: Text('Combos'),
-                          ),
-                        ],
-                        selected: {_selectedTab},
-                        onSelectionChanged: (selection) =>
-                            setState(() => _selectedTab = selection.single),
-                      ),
-                      const SizedBox(height: 14),
-                      Expanded(
-                        child: _selectedTab == _ItemTab.products
-                            ? _ProductGrid(
-                                products: _controller.products,
-                                onTap: _controller.addProduct,
-                              )
-                            : _ComboGrid(
-                                combos: _controller.combos,
-                                onTap: _controller.addCombo,
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            Expanded(
-              flex: order.isOpen ? (narrow ? 4 : 2) : 1,
-              child: ColoredBox(
-                color: Colors.white,
-                child: Padding(
-                  padding: EdgeInsets.all(narrow ? 14 : 22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              order.orderNumber,
-                              style: Theme.of(context).textTheme.headlineMedium,
-                            ),
-                          ),
-                          Chip(label: Text(order.status.databaseValue)),
-                        ],
-                      ),
-                      Text(
-                        formatOrderDateTime(order.createdAt),
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                      const Divider(height: 28),
-                      Expanded(
-                        child: ListView.separated(
-                          itemCount: _controller.items.length,
-                          separatorBuilder: (_, _) => const Divider(height: 22),
-                          itemBuilder: (context, index) => _DetailItemRow(
-                            item: _controller.items[index],
-                            editable:
-                                order.isOpen &&
-                                !_controller.items[index].isComplementary,
-                            onIncrease: _controller.increase,
-                            onDecrease: _controller.decrease,
-                          ),
-                        ),
-                      ),
-                      const Divider(height: 24),
-                      if (_controller.requiresComplementSelection) ...[
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            _controller.beginComplementSelection();
-                            _selectComplement();
-                          },
-                          icon: const Icon(Icons.redeem),
-                          label: const Text('Select Complement'),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      if (_controller.canChangeComplement) ...[
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            _controller.beginComplementSelection();
-                            _selectComplement();
-                          },
-                          icon: const Icon(Icons.redeem),
-                          label: const Text('Change Complement'),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      _AmountRow(
-                        label: 'Subtotal',
-                        value: _controller.subtotal,
-                      ),
-                      if (_controller.taxAmount > 0)
-                        _AmountRow(
-                          label: _controller.taxLabel,
-                          value: _controller.taxAmount,
-                        ),
-                      _AmountRow(
-                        label: 'Grand Total',
-                        value: _controller.total,
-                        prominent: true,
-                      ),
-                      if (!order.isOpen && order.paymentMethodName != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Payment: ${order.paymentMethodName}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      if (order.isOpen) ...[
-                        TextField(
-                          controller: _customerNameController,
-                          textCapitalization: TextCapitalization.words,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            labelText: 'Customer Name (Optional)',
-                            prefixIcon: Icon(Icons.person_outline),
-                            border: OutlineInputBorder(),
-                          ),
+              if (!usePaneSwitcher || _compactPane == _OrderDetailsPane.items)
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: narrow
+                        ? const EdgeInsets.all(12)
+                        : const EdgeInsets.fromLTRB(24, 20, 16, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add items',
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 12),
+                        if (_combosEnabled)
+                          SegmentedButton<_ItemTab>(
+                            segments: const [
+                              ButtonSegment(
+                                value: _ItemTab.products,
+                                icon: Icon(Icons.restaurant_menu),
+                                label: Text('Products'),
+                              ),
+                              ButtonSegment(
+                                value: _ItemTab.combos,
+                                icon: Icon(Icons.fastfood),
+                                label: Text('Combos'),
+                              ),
+                            ],
+                            selected: {_selectedTab},
+                            onSelectionChanged: (selection) =>
+                                setState(() => _selectedTab = selection.single),
+                          ),
+                        const SizedBox(height: 14),
+                        Expanded(
+                          child: _selectedTab == _ItemTab.products
+                              ? _ProductGrid(
+                                  products: _controller.products,
+                                  onTap: _controller.addProduct,
+                                )
+                              : _ComboGrid(
+                                  combos: _controller.combos,
+                                  onTap: _controller.addCombo,
+                                ),
+                        ),
                       ],
-                      _OrderActions(
-                        isOpen: order.isOpen,
-                        isDirty: _controller.isDirty,
-                        isSaving: _controller.isSaving,
-                        isPrinting: _isPrinting,
-                        hasItems: _controller.items.isNotEmpty,
-                        onSave: _save,
-                        onPrint: _printBill,
-                        onClose: _close,
-                      ),
-                    ],
+                    ),
+                  ),
+                ),
+            if (!usePaneSwitcher || _compactPane == _OrderDetailsPane.order)
+              Expanded(
+                flex: order.isOpen ? (narrow ? 4 : 2) : 1,
+                child: ColoredBox(
+                  color: Colors.white,
+                  child: Padding(
+                    padding: EdgeInsets.all(narrow ? 14 : 22),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                order.orderNumber,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium,
+                              ),
+                            ),
+                            Chip(label: Text(order.status.databaseValue)),
+                          ],
+                        ),
+                        Text(
+                          formatOrderDateTime(order.createdAt),
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                        const Divider(height: 28),
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: _controller.items.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 22),
+                            itemBuilder: (context, index) => _DetailItemRow(
+                              item: _controller.items[index],
+                              editable:
+                                  order.isOpen &&
+                                  !_controller.items[index].isComplementary,
+                              onIncrease: _controller.increase,
+                              onDecrease: _controller.decrease,
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 24),
+                        if (_controller.requiresComplementSelection) ...[
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              _controller.beginComplementSelection();
+                              _selectComplement();
+                            },
+                            icon: const Icon(Icons.redeem),
+                            label: const Text('Select Complement'),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        if (_controller.canChangeComplement) ...[
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              _controller.beginComplementSelection();
+                              _selectComplement();
+                            },
+                            icon: const Icon(Icons.redeem),
+                            label: const Text('Change Complement'),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        _AmountRow(
+                          label: 'Subtotal',
+                          value: _controller.subtotal,
+                        ),
+                        if (_controller.taxAmount > 0)
+                          _AmountRow(
+                            label: _controller.taxLabel,
+                            value: _controller.taxAmount,
+                          ),
+                        _AmountRow(
+                          label: 'Grand Total',
+                          value: _controller.total,
+                          prominent: true,
+                        ),
+                        if (!order.isOpen && order.paymentMethodName != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Payment: ${order.paymentMethodName}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        if (order.isOpen) ...[
+                          TextField(
+                            controller: _customerNameController,
+                            textCapitalization: TextCapitalization.words,
+                            textInputAction: TextInputAction.done,
+                            decoration: const InputDecoration(
+                              labelText: 'Customer Name (Optional)',
+                              prefixIcon: Icon(Icons.person_outline),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        _OrderActions(
+                          isOpen: order.isOpen,
+                          isDirty: _controller.isDirty,
+                          isSaving: _controller.isSaving,
+                          isPrinting: _isPrinting,
+                          hasItems: _controller.items.isNotEmpty,
+                          onSave: _save,
+                          onPrint: _printBill,
+                          onClose: _close,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
+          ],
+        );
+        if (!usePaneSwitcher) return content;
+        return Column(
+          children: [
+            _OrderDetailsPaneSwitcher(
+              selected: _compactPane,
+              itemCount: _controller.items.length,
+              onChanged: (pane) => setState(() => _compactPane = pane),
             ),
+            const Divider(height: 1),
+            Expanded(child: content),
           ],
         );
       },
+    ),
+  );
+}
+
+enum _OrderDetailsPane { items, order }
+
+class _OrderDetailsPaneSwitcher extends StatelessWidget {
+  const _OrderDetailsPaneSwitcher({
+    required this.selected,
+    required this.itemCount,
+    required this.onChanged,
+  });
+
+  final _OrderDetailsPane selected;
+  final int itemCount;
+  final ValueChanged<_OrderDetailsPane> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+    child: SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<_OrderDetailsPane>(
+        expandedInsets: EdgeInsets.zero,
+        segments: [
+          const ButtonSegment(
+            value: _OrderDetailsPane.items,
+            icon: Icon(Icons.add_shopping_cart_outlined),
+            label: Text('Add Items'),
+          ),
+          ButtonSegment(
+            value: _OrderDetailsPane.order,
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: Text('Order ($itemCount)'),
+          ),
+        ],
+        selected: {selected},
+        showSelectedIcon: false,
+        onSelectionChanged: (selection) => onChanged(selection.single),
+      ),
     ),
   );
 }

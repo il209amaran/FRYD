@@ -1,3 +1,3 @@
 abstract final class AppConstants {
-  static const appName = 'FRYD';
+  static const appName = 'KANAKKI';
 }

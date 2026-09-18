@@ -134,33 +134,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                   : null,
             ),
             const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final dropdown = _buildCategoryDropdown();
-                final addButton = SizedBox(
-                  height: 56,
-                  child: OutlinedButton.icon(
-                    onPressed: _isSaving ? null : _addCategory,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Category'),
-                  ),
-                );
-                if (constraints.maxWidth < 460) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [dropdown, const SizedBox(height: 10), addButton],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: dropdown),
-                    const SizedBox(width: 12),
-                    addButton,
-                  ],
-                );
-              },
-            ),
+            _buildCategoryField(context),
             const SizedBox(height: 16),
             TextFormField(
               controller: _priceController,
@@ -210,6 +184,35 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       ),
     ],
   );
+
+  Widget _buildCategoryField(BuildContext context) {
+    final dropdown = _buildCategoryDropdown();
+    final addButton = SizedBox(
+      height: 56,
+      child: OutlinedButton.icon(
+        onPressed: _isSaving ? null : _addCategory,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Category'),
+      ),
+    );
+
+    // AlertDialog measures its content intrinsically. Avoid LayoutBuilder here,
+    // because it cannot provide intrinsic dimensions during that measurement.
+    if (MediaQuery.sizeOf(context).width < 600) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [dropdown, const SizedBox(height: 10), addButton],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: dropdown),
+        const SizedBox(width: 12),
+        addButton,
+      ],
+    );
+  }
 
   Widget _buildCategoryDropdown() {
     if (_isLoadingCategories) {

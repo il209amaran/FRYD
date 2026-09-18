@@ -162,7 +162,7 @@ class ReceiptBuilder {
     final generator = Generator(PaperSize.mm58, profile);
     return [
       ...generator.text(
-        'FRYD',
+        'KANAKKI',
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,

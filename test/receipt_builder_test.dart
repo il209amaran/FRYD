@@ -1,14 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fryd/features/business/data/business_settings_repository.dart';
-import 'package:fryd/features/business/data/receipt_settings_repository.dart';
-import 'package:fryd/features/printer/services/receipt_builder.dart';
-import 'package:fryd/features/settings/data/complement_settings_repository.dart';
-import 'package:fryd/models/business_settings.dart';
-import 'package:fryd/models/order.dart';
-import 'package:fryd/models/order_item.dart';
-import 'package:fryd/models/receipt_settings.dart';
+import 'package:kanakki/features/business/data/business_settings_repository.dart';
+import 'package:kanakki/features/business/data/receipt_settings_repository.dart';
+import 'package:kanakki/features/printer/services/receipt_builder.dart';
+import 'package:kanakki/features/settings/data/complement_settings_repository.dart';
+import 'package:kanakki/models/business_settings.dart';
+import 'package:kanakki/models/order.dart';
+import 'package:kanakki/models/order_item.dart';
+import 'package:kanakki/models/receipt_settings.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -88,7 +88,7 @@ void main() {
 class _FakeBusinessSettingsRepository extends BusinessSettingsRepository {
   @override
   Future<BusinessSettings> get() async => const BusinessSettings(
-    businessName: 'FRYD',
+    businessName: 'Kanakki',
     businessType: 'Restaurant',
     address: '',
     phone: '',

@@ -23,10 +23,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   _HomeSection _selectedSection = _HomeSection.billing;
   late final CurrentOrderController _currentOrder;
+  final ValueNotifier<int> _ordersRefresh = ValueNotifier(0);
   final Map<_HomeSection, Widget> _pages = {};
   final _complementSettings = ComplementSettingsRepository();
   late final StreamSubscription<bool> _complementSettingsChanges;
-  bool _complementsEnabled = true;
+  bool _complementsEnabled = false;
 
   @override
   void initState() {
@@ -62,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _currentOrder.dispose();
+    _ordersRefresh.dispose();
     _complementSettingsChanges.cancel();
     super.dispose();
   }
@@ -110,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
       currentOrder: _currentOrder,
       onOrderCompleted: () => _selectPage(_HomeSection.orders),
     ),
-    _HomeSection.orders => const OrdersScreen(),
+    _HomeSection.orders => OrdersScreen(refreshListenable: _ordersRefresh),
     _HomeSection.products => const ProductsScreen(),
     _HomeSection.complements => const ComplementsScreen(),
     _HomeSection.reports => const ReportsScreen(),
@@ -122,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _pages[section] ??= _createPage(section);
       _selectedSection = section;
     });
+    if (section == _HomeSection.orders) _ordersRefresh.value++;
   }
 
   int get _selectedIndex => _destinations.indexWhere(
@@ -153,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
             title: const Text(
               AppConstants.appName,
               style: TextStyle(
-                color: FrydTheme.brand,
+                color: KanakkiTheme.brand,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.5,
               ),
@@ -198,7 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                     AppConstants.appName,
                     style: TextStyle(
-                      color: FrydTheme.brand,
+                      color: KanakkiTheme.brand,
                       fontSize: extended ? 25 : 15,
                       fontWeight: FontWeight.w800,
                       letterSpacing: extended ? 2 : 0.5,

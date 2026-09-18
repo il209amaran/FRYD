@@ -1,10 +1,6 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
-import 'combo_seed.dart';
-import 'complement_seed.dart';
-import 'menu_seed.dart';
-
 class DatabaseManager {
   DatabaseManager._();
 
@@ -41,9 +37,6 @@ class DatabaseManager {
       await _createBusinessTables(transaction, setupCompleted: false);
       await _createComboTable(transaction);
       await _createComplementTable(transaction);
-      await MenuSeed.import(transaction);
-      await ComboSeed.import(transaction);
-      await ComplementSeed.import(transaction);
     });
   }
 
@@ -143,9 +136,6 @@ class DatabaseManager {
         await transaction.execute('ALTER TABLE products_v3 RENAME TO products');
       });
     }
-    if (oldVersion < 4) {
-      await database.transaction(MenuSeed.import);
-    }
     if (oldVersion < 5) {
       await database.transaction((transaction) async {
         await transaction.execute('DROP TABLE IF EXISTS bill_items');
@@ -170,9 +160,6 @@ class DatabaseManager {
           );
         }
       });
-    }
-    if (oldVersion < 7) {
-      await database.transaction(ComboSeed.import);
     }
     if (oldVersion < 8) {
       await database.transaction((transaction) async {
@@ -288,7 +275,7 @@ class DatabaseManager {
     );
     await database.insert('business_settings', {
       'id': 1,
-      'business_name': 'FRYD',
+      'business_name': 'Kanakki',
       'business_type': 'Restaurant',
       'address': '',
       'phone': '',
@@ -312,7 +299,7 @@ class DatabaseManager {
       'show_phone': 1,
       'show_email': 1,
       'show_tax_number': 1,
-      'header': 'TAKEOUT by AKILA',
+      'header': '',
       'footer': 'Thank You!\nVisit Again :)',
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
     await database.execute(

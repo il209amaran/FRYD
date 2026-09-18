@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-abstract final class FrydTheme {
+abstract final class KanakkiTheme {
   static const brand = Color(0xFFE85D36);
   static const ink = Color(0xFF18221F);
 

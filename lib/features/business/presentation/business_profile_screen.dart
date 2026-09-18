@@ -74,7 +74,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     final receipt = results[1] as ReceiptSettings;
     if (!mounted) return;
     _settings = settings;
-    _name.text = widget.setupMode && settings.businessName == 'FRYD'
+    _name.text = widget.setupMode && settings.businessName == 'Kanakki'
         ? ''
         : settings.businessName;
     _address.text = settings.address;
@@ -178,7 +178,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                       children: [
                         Text(
                           widget.setupMode
-                              ? 'Welcome to FRYD'
+                              ? 'Welcome to Kanakki'
                               : 'Business Profile',
                           style: Theme.of(context).textTheme.headlineMedium,
                         ),

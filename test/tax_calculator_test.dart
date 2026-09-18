@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fryd/core/services/tax_calculator.dart';
-import 'package:fryd/models/business_settings.dart';
+import 'package:kanakki/core/services/tax_calculator.dart';
+import 'package:kanakki/models/business_settings.dart';
 
 void main() {
   test('disabled tax leaves subtotal unchanged', () {

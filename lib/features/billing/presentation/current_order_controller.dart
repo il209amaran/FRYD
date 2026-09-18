@@ -45,7 +45,7 @@ class CurrentOrderController extends ChangeNotifier {
   BusinessSettings? _businessSettings;
   late final StreamSubscription<BusinessSettings> _settingsChanges;
   late final StreamSubscription<bool> _complementSettingsChanges;
-  bool _complementsEnabled = true;
+  bool _complementsEnabled = false;
 
   Future<void> initialize() async {
     try {

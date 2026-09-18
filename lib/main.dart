@@ -4,5 +4,5 @@ import 'app/app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const FrydApp());
+  runApp(const KanakkiApp());
 }

@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -8,10 +10,11 @@ import '../../../core/utils/date_time_formatter.dart';
 import '../../../models/report_models.dart';
 
 class ReportExportService {
+  static const _downloadsChannel = MethodChannel('com.fryd.fryd/downloads');
+
   Future<String> exportRange(RangeReport report) async {
     final excel = Excel.createExcel();
-    _removeDefaultSheet(excel);
-    final orders = excel['Orders'];
+    final orders = _createSheet(excel, 'Orders');
     orders.appendRow(
       _textRow([
         'Order Number',
@@ -45,6 +48,10 @@ class ReportExportService {
       ['Average Order Value', report.averageOrderValue],
       ['Total Items Sold', report.totalItems],
     ]);
+    _formatSheet(
+      orders,
+      columnWidths: const [22, 16, 14, 12, 14, 12, 14, 22],
+    );
 
     final items = excel['Item Sales'];
     items.appendRow(
@@ -58,15 +65,16 @@ class ReportExportService {
         DoubleCellValue(item.sales),
       ]);
     }
+    _formatSheet(items, columnWidths: const [28, 16, 16, 18]);
     return _save(
       excel,
-      'FRYD_Custom_${_fileDate(report.from)}_${_fileDate(report.to)}.xlsx',
+      'Kanakki_Custom_${_fileDate(report.from)}_${_fileDate(report.to)}.xlsx',
     );
   }
 
   Future<String> exportWeekly(List<PeriodSales> periods) async {
     final excel = Excel.createExcel();
-    final sheet = excel[excel.getDefaultSheet() ?? 'Weekly Sales'];
+    final sheet = _createSheet(excel, 'Weekly Sales');
     sheet.appendRow(
       _textRow([
         'Week Start',
@@ -100,12 +108,13 @@ class ReportExportService {
         ],
       ]);
     }
-    return _save(excel, 'FRYD_Weekly_Sales.xlsx');
+    _formatSheet(sheet, columnWidths: const [24, 18, 18, 18, 22]);
+    return _save(excel, 'Kanakki_Weekly_Sales.xlsx');
   }
 
   Future<String> exportMonthly(List<PeriodSales> periods) async {
     final excel = Excel.createExcel();
-    final sheet = excel[excel.getDefaultSheet() ?? 'Monthly Sales'];
+    final sheet = _createSheet(excel, 'Monthly Sales');
     sheet.appendRow(
       _textRow([
         'Month',
@@ -139,7 +148,8 @@ class ReportExportService {
         ],
       ]);
     }
-    return _save(excel, 'FRYD_Monthly_Sales.xlsx');
+    _formatSheet(sheet, columnWidths: const [24, 12, 18, 18, 22]);
+    return _save(excel, 'Kanakki_Monthly_Sales.xlsx');
   }
 
   List<CellValue?> _textRow(List<String> values) =>
@@ -159,15 +169,48 @@ class ReportExportService {
     }
   }
 
-  void _removeDefaultSheet(Excel excel) {
-    final name = excel.getDefaultSheet();
-    if (name != null) excel.delete(name);
+  Sheet _createSheet(Excel excel, String name) {
+    final defaultName = excel.getDefaultSheet();
+    final sheet = excel[name];
+    if (defaultName != null && defaultName != name) {
+      excel.delete(defaultName);
+    }
+    excel.setDefaultSheet(name);
+    return sheet;
+  }
+
+  void _formatSheet(Sheet sheet, {required List<double> columnWidths}) {
+    for (var index = 0; index < columnWidths.length; index++) {
+      sheet.setColumnWidth(index, columnWidths[index]);
+      final header = sheet.cell(
+        CellIndex.indexByColumnRow(columnIndex: index, rowIndex: 0),
+      );
+      header.cellStyle = (header.cellStyle ?? CellStyle()).copyWith(boldVal: true);
+    }
   }
 
   Future<String> _save(Excel excel, String fileName) async {
     final bytes = excel.encode();
     if (bytes == null) throw StateError('Excel file could not be generated.');
-    final directory = await getApplicationDocumentsDirectory();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final savedPath = await _downloadsChannel.invokeMethod<String>(
+        'saveFile',
+        {
+          'fileName': fileName,
+          'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'bytes': Uint8List.fromList(bytes),
+        },
+      );
+      if (savedPath == null) {
+        throw StateError('Excel file could not be saved to Downloads.');
+      }
+      return savedPath;
+    }
+    final directory = await getDownloadsDirectory();
+    if (directory == null) {
+      throw StateError('The Downloads directory is unavailable.');
+    }
+    await directory.create(recursive: true);
     final file = File(p.join(directory.path, fileName));
     await file.writeAsBytes(bytes, flush: true);
     return file.path;

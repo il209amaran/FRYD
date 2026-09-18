@@ -1,6 +1,6 @@
-# fryd
+# Kanakki
 
-A new Flutter project.
+An offline-first billing and point-of-sale application.
 
 ## Getting Started
 

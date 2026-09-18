@@ -13,7 +13,7 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  static const _backgroundColor = Color(0xFFFFF3E0);
+  static const _backgroundColor = Colors.white;
 
   @override
   void initState() {
@@ -40,17 +40,20 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: _backgroundColor,
-    body: Center(
-      child: LayoutBuilder(
-        builder: (context, constraints) => SizedBox(
-          height: constraints.maxHeight * 0.58,
+    body: LayoutBuilder(
+      builder: (context, constraints) {
+        final isPortrait = constraints.maxHeight >= constraints.maxWidth;
+        return SizedBox.expand(
           child: Image.asset(
-            'images/appsplash.png',
+            isPortrait
+                ? 'images/splash_potrait.png'
+                : 'images/splash_landscape.png',
             fit: BoxFit.contain,
+            alignment: Alignment.center,
             filterQuality: FilterQuality.high,
           ),
-        ),
-      ),
+        );
+      },
     ),
   );
 }

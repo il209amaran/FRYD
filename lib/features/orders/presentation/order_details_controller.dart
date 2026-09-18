@@ -62,7 +62,7 @@ class OrderDetailsController extends ChangeNotifier {
   Future<void>? _evaluation;
   BusinessSettings? _businessSettings;
   List<PaymentMethod> _paymentMethods = const [];
-  bool _complementsEnabled = true;
+  bool _complementsEnabled = false;
   late final StreamSubscription<bool> _complementSettingsChanges;
 
   RestaurantOrder? get order => _order;

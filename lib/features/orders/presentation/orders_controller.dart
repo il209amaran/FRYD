@@ -5,6 +5,12 @@ import '../data/order_repository.dart';
 
 enum OrderFilter { all, open, closed }
 
+DateTime recentOrdersCutoff(DateTime now) {
+  final local = now.toLocal();
+  final today = DateTime(local.year, local.month, local.day);
+  return today.subtract(const Duration(days: 2));
+}
+
 class OrdersController extends ChangeNotifier {
   OrdersController({OrderRepository? repository})
     : _repository = repository ?? SqliteOrderRepository();
@@ -36,7 +42,10 @@ class OrdersController extends ChangeNotifier {
         OrderFilter.open => OrderStatus.open,
         OrderFilter.closed => OrderStatus.closed,
       };
-      _orders = await _repository.getOrders(status: status);
+      _orders = await _repository.getOrders(
+        status: status,
+        createdFrom: recentOrdersCutoff(DateTime.now()),
+      );
     } catch (_) {
       _errorMessage = 'Orders could not be loaded.';
     } finally {
